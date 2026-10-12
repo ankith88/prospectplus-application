@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Building, Phone, Mail, MapPin, Calendar, Clock, Save, FileText, Send, User, CheckCircle2, DollarSign, Truck, UserCheck, Edit3, Link2, ArrowUpRight, RefreshCw, Lock, Trash2, RotateCcw, Copy, Key, ExternalLink, Ban, Loader2 } from 'lucide-react';
 import { LpoConversionWizard, buildLpoServicesArray } from './lpo-conversion-wizard';
 import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
+import { CopyButton } from '@/components/ui/copy-button';
 
 interface LpoLeadProfileProps {
   initialLead: any;
@@ -1353,18 +1354,40 @@ export function LpoLeadProfile({ initialLead }: LpoLeadProfileProps) {
                   <Mail className="h-5 w-5 text-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500 font-medium">Contact Email</p>
-                    <a href={`mailto:${lead.email}`} className="text-xs font-semibold text-[#095c7b] hover:underline break-all block">
-                      {lead.email}
-                    </a>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <a href={`mailto:${lead.email}`} className="text-xs font-semibold text-[#095c7b] hover:underline break-all">
+                        {lead.email}
+                      </a>
+                      {lead.email && (
+                        <CopyButton 
+                          textToCopy={lead.email} 
+                          className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                          iconClassName="h-3 w-3" 
+                          toastTitle="Copied" 
+                          toastDescription="Email copied to clipboard." 
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-50/70 border border-slate-100 min-w-0 overflow-hidden">
                   <Phone className="h-5 w-5 text-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500 font-medium">Contact Phone</p>
-                    <a href={`tel:${lead.phone}`} className="text-xs font-semibold text-[#095c7b] hover:underline break-all block">
-                      {lead.phone}
-                    </a>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <a href={`tel:${lead.phone}`} className="text-xs font-semibold text-[#095c7b] hover:underline break-all">
+                        {lead.phone}
+                      </a>
+                      {lead.phone && (
+                        <CopyButton 
+                          textToCopy={lead.phone} 
+                          className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                          iconClassName="h-3 w-3" 
+                          toastTitle="Copied" 
+                          toastDescription="Phone number copied to clipboard." 
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

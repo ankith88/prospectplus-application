@@ -6,6 +6,7 @@ import { collection, query, getDocs, updateDoc, doc, addDoc, limit, getDoc } fro
 import { firestore } from '@/lib/firebase';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import { Lead, CancellationRequest, ServiceSelection, RETENTION_STRATEGIES, RetentionStrategy } from '@/lib/types';
+import { initiateOutboundCall } from '@/lib/telephony';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -261,7 +262,7 @@ export default function CancellationDashboard() {
   const handleInitiateCall = async (req: CancellationRequest, phoneNumber: string) => {
     if (!phoneNumber) return;
     try {
-      window.open(`aircall:${phoneNumber}`);
+      initiateOutboundCall(phoneNumber, userProfile);
       const newCallsCount = (req.callsCount || 0) + 1;
       
       // Update local state

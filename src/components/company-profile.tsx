@@ -88,6 +88,7 @@ import { NotifyUpsellDialog } from '@/components/notify-upsell-dialog'
 import { Badge } from './ui/badge'
 import { DiscoveryRadarChart } from './discovery-radar-chart'
 import { logActivity, getAllUsers, getCompanyFromFirebase, deleteAdditionalAddress, getOperatorsForFranchisee, getAllFranchisees, isLostLeadStatus } from '@/services/firebase'
+import { initiateOutboundCall, resolveUserTelephonyProvider } from '@/lib/telephony'
 import { formatInTimezone, parseDateString, safeFormatDate, getLeadDisplayDateValue, getLeadDisplayDateLabel, getInvoiceLineItems } from '@/lib/utils'
 import { getMergedCancellationHierarchy, autoMapLostOutcome, getCancellationTypeInfo } from '@/lib/cancellation-reasons-mapper'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog'
@@ -1431,10 +1432,12 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
   const executeCall = (phoneNumber: string) => {
     if (!phoneNumber) return;
-    window.open(`aircall:${phoneNumber}`);
+    initiateOutboundCall(phoneNumber, userProfile);
+    const provider = resolveUserTelephonyProvider(userProfile);
+    const providerLabel = provider === 'dialpad' ? 'Dialpad' : 'AirCall';
     logActivity(company.id, { 
         type: 'Call', 
-        notes: `Initiated call to ${phoneNumber} via AirCall app.`,
+        notes: `Initiated call to ${phoneNumber} via ${providerLabel} app.`,
         author: user?.displayName || 'Unknown',
         email: user?.email || undefined,
         aircallStatus: 'initiated'
@@ -2199,9 +2202,22 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
 
                                 <div className="space-y-1.5 pt-1 border-t text-xs">
                                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1.5">
                                             <Mail className="w-3.5 h-3.5 text-muted-foreground" />
-                                            <span>{contact.email}</span>
+                                            {contact.email ? (
+                                                <>
+                                                    <span>{contact.email}</span>
+                                                    <CopyButton 
+                                                        textToCopy={contact.email} 
+                                                        className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                                                        iconClassName="h-3 w-3" 
+                                                        toastTitle="Copied" 
+                                                        toastDescription="Email copied to clipboard." 
+                                                    />
+                                                </>
+                                            ) : (
+                                                <span className="text-muted-foreground">-</span>
+                                            )}
                                         </div>
                                         {contact.email && (
                                             <EmailVerificationBadge
@@ -2214,7 +2230,55 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                             />
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-muted-foreground" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleInitiateCall(contact.phone)}><PhoneCall className="h-3 w-3" /></Button></div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                                        {contact.phone ? (
+                                            <>
+                                                <span>{contact.phone}</span>
+                                                <CopyButton 
+                                                    textToCopy={contact.phone} 
+                                                    className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                                                    iconClassName="h-3 w-3" 
+                                                    toastTitle="Copied" 
+                                                    toastDescription="Phone number copied to clipboard." 
+                                                />
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6 ml-1 text-muted-foreground hover:text-foreground" 
+                                                    onClick={() => handleInitiateCall(contact.phone)}
+                                                    title="Call"
+                                                >
+                                                    <PhoneCall className="h-3 w-3" />
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <span className="text-muted-foreground">-</span>
+                                        )}
+                                    </div>
+                                    {(contact as any).mobile && (contact as any).mobile !== contact.phone && (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                                            <span className="text-muted-foreground">Mobile:</span>
+                                            <span>{(contact as any).mobile}</span>
+                                            <CopyButton 
+                                                textToCopy={(contact as any).mobile} 
+                                                className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                                                iconClassName="h-3 w-3" 
+                                                toastTitle="Copied" 
+                                                toastDescription="Mobile number copied to clipboard." 
+                                            />
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-6 w-6 ml-1 text-muted-foreground hover:text-foreground" 
+                                                onClick={() => handleInitiateCall((contact as any).mobile)}
+                                                title="Call"
+                                            >
+                                                <PhoneCall className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}

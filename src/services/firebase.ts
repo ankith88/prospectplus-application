@@ -3244,16 +3244,18 @@ async function getLeadTasks(leadId: string): Promise<Task[]> {
     return getSubCollection<Task>('leads', leadId, 'tasks', 'dueDate', 'asc');
 }
 
-async function mergeLeads(masterLeadId: string, duplicateLeadId: string): Promise<void> {
+async function mergeLeads(masterLeadId: string, duplicateLeadId: string): Promise<{ success: boolean; localMileMerged: boolean; details?: any }> {
     return mergeMultipleLeads(masterLeadId, [duplicateLeadId]);
 }
 
-async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[]): Promise<void> {
+async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[]): Promise<{ success: boolean; localMileMerged: boolean; details?: any }> {
     const batch = writeBatch(firestore);
     let totalContactsCount = 0;
     const validSourceLeadIds = sourceLeadIds.filter(id => id && id !== targetLeadId);
 
-    if (validSourceLeadIds.length === 0) return;
+    if (validSourceLeadIds.length === 0) {
+        return { success: true, localMileMerged: false };
+    }
     
     for (const sourceLeadId of validSourceLeadIds) {
         const sourceRef = doc(firestore, 'leads', sourceLeadId);
@@ -3273,7 +3275,11 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
             bucketHistory,
             companyInsights,
             addresses,
-            scorecards
+            scorecards,
+            localMileJobs,
+            services,
+            scheduledServices,
+            documents
         ] = await Promise.all([
             getSubCollection<any>('leads', sourceLeadId, 'contacts', documentId()),
             getSubCollection<any>('leads', sourceLeadId, 'activity', 'date'),
@@ -3286,7 +3292,11 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
             getSubCollection<any>('leads', sourceLeadId, 'bucket_history', 'date', 'desc'),
             getSubCollection<any>('leads', sourceLeadId, 'company_insights', 'scannedAt', 'desc'),
             getSubCollection<any>('leads', sourceLeadId, 'addresses', documentId()),
-            getSubCollection<any>('leads', sourceLeadId, 'scorecards', 'createdAt')
+            getSubCollection<any>('leads', sourceLeadId, 'scorecards', 'createdAt'),
+            getSubCollection<any>('leads', sourceLeadId, 'localMileJobs', 'createdAt'),
+            getSubCollection<any>('leads', sourceLeadId, 'services', documentId()),
+            getSubCollection<any>('leads', sourceLeadId, 'scheduledServices', documentId()),
+            getSubCollection<any>('leads', sourceLeadId, 'documents', documentId())
         ]);
         
         totalContactsCount += contacts.length;
@@ -3350,6 +3360,26 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
             const { id, ...data } = sc;
             batch.set(doc(firestore, 'leads', targetLeadId, 'scorecards', `${id}-${sourceLeadId}`), prepareForFirestore(data));
         });
+
+        localMileJobs.forEach(j => {
+            const { id, ...data } = j;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'localMileJobs', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+
+        services.forEach(s => {
+            const { id, ...data } = s;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'services', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+
+        scheduledServices.forEach(ss => {
+            const { id, ...data } = ss;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'scheduledServices', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
+
+        documents.forEach(d => {
+            const { id, ...data } = d;
+            batch.set(doc(firestore, 'leads', targetLeadId, 'documents', `${id}-${sourceLeadId}`), prepareForFirestore(data));
+        });
         
         batch.delete(sourceRef);
     }
@@ -3369,6 +3399,37 @@ async function mergeMultipleLeads(targetLeadId: string, sourceLeadIds: string[])
     batch.set(doc(firestore, 'leads', targetLeadId, 'activity', `merge-${Date.now()}`), prepareForFirestore(mergeLog));
     
     await batch.commit();
+
+    // Trigger LocalMile Plus database merge for associated accounts
+    let localMileMerged = false;
+    let localMileDetails: any = null;
+    try {
+        const response = await fetch('/api/localmile/merge-accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                targetLeadId,
+                sourceLeadIds: validSourceLeadIds
+            })
+        });
+
+        if (response.ok) {
+            const json = await response.json();
+            localMileMerged = Boolean(json.merged);
+            localMileDetails = json;
+            console.log(`[mergeMultipleLeads] LocalMile merge outcome:`, json);
+        } else {
+            console.warn(`[mergeMultipleLeads] LocalMile merge API returned status ${response.status}`);
+        }
+    } catch (lmErr) {
+        console.error(`[mergeMultipleLeads] Error invoking LocalMile merge API:`, lmErr);
+    }
+
+    return {
+        success: true,
+        localMileMerged,
+        details: localMileDetails
+    };
 }
 
 async function getAllTasks(): Promise<Task[]> {

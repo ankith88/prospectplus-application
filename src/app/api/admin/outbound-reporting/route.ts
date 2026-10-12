@@ -10,9 +10,9 @@ interface CacheEntry {
   data: any;
 }
 
-// In-memory cache keyed by date range for fast sub-second loads (60s TTL)
+// In-memory cache keyed by query parameters (5-minute TTL)
 const memoryCacheMap = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 function safeGetStatus(val: any): string {
   if (!val) return 'Uncontacted';
@@ -43,44 +43,24 @@ function parseDateString(dateVal: any): Date | null {
   return null;
 }
 
+function isDialerNameMatch(assigned: string | undefined | null, dialer: string): boolean {
+  if (!assigned || !dialer) return false;
+  const a = assigned.toLowerCase().trim().replace(/\bleeroy\b/g, 'lee');
+  const d = dialer.toLowerCase().trim().replace(/\bleeroy\b/g, 'lee');
+  return a === d || a.startsWith(d) || d.startsWith(a);
+}
+
 function sanitizeString(val: any, maxLength?: number): string {
   if (val === null || val === undefined) return '';
   let str = typeof val === 'string' ? val : String(val);
-  // Replace control whitespace (tabs, carriage returns, vertical tabs, form feeds) with spaces
   str = str.replace(/[\t\r\v\f]/g, ' ').replace(/\n+/g, ' ');
-  // Strip non-printable ASCII control characters (0x00-0x1F, 0x7F)
   str = str.replace(/[\x00-\x1F\x7F]/g, '');
-  // Strip zero-width formatting characters
   str = str.replace(/[\u200B-\u200D\uFEFF]/g, '');
-  // Clean dangling unicode surrogates that break JSON serialization
   str = str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '');
-  // Unicode-safe substring
   if (maxLength && str.length > maxLength) {
     str = Array.from(str).slice(0, maxLength).join('');
   }
   return str.trim();
-}
-
-function deepSanitize(val: any): any {
-  if (val === null || val === undefined) return null;
-  if (typeof val === 'string') return sanitizeString(val, 500);
-  if (typeof val === 'number' || typeof val === 'boolean') return val;
-  if (val instanceof Date) return val.toISOString();
-  if (typeof val === 'object' && typeof val.toDate === 'function') {
-    return val.toDate().toISOString();
-  }
-  if (Array.isArray(val)) {
-    return val.map(item => deepSanitize(item));
-  }
-  if (typeof val === 'object') {
-    const cleaned: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val)) {
-      const cleanKey = sanitizeString(k, 100);
-      cleaned[cleanKey] = deepSanitize(v);
-    }
-    return cleaned;
-  }
-  return String(val);
 }
 
 export async function GET(req: NextRequest) {
@@ -89,22 +69,37 @@ export async function GET(req: NextRequest) {
     const startDateParam = searchParams.get('startDate');
     const endDateParam = searchParams.get('endDate');
     const forceRefresh = searchParams.get('refresh') === 'true';
+    const isDialerPerformanceOnly = searchParams.get('isDialerPerformanceOnly') === 'true';
 
     const now = Date.now();
+    const nowDate = new Date();
 
-    // Calculate start boundary
-    let startISO = new Date(2026, 6, 1).toISOString(); // Default 1st July 2026
+    // 1. Calculate start boundary
+    // For outbound dialer performance, only recent timeframes (today, yesterday, this week, last week, monthly)
+    // are viewed, so defaulting to the 1st of the previous month provides full coverage with 5-10x faster query time.
+    let startISO = new Date(2026, 6, 1).toISOString(); // Default 1st July 2026 for full reporting
+    if (isDialerPerformanceOnly) {
+      const prevMonth = new Date(nowDate.getFullYear(), nowDate.getMonth() - 1, 1);
+      startISO = prevMonth.toISOString();
+    }
+
     if (startDateParam) {
       const parsedStart = new Date(startDateParam);
       if (!isNaN(parsedStart.getTime())) {
-        startISO = parsedStart.toISOString();
+        if (isDialerPerformanceOnly) {
+          const maxLookback = new Date(nowDate.getFullYear(), nowDate.getMonth() - 1, 1);
+          startISO = parsedStart < maxLookback ? maxLookback.toISOString() : parsedStart.toISOString();
+        } else {
+          startISO = parsedStart.toISOString();
+        }
       }
     }
 
-    const cacheKey = `${startISO}_${endDateParam || ''}`;
+    const dialersParam = searchParams.get('dialers');
+    const cacheKey = `${startISO}_${endDateParam || ''}_${isDialerPerformanceOnly ? 'dialerOnly' : 'all'}_${dialersParam || 'all'}`;
     const cachedEntry = memoryCacheMap.get(cacheKey);
 
-    // Return in-memory cached data if available and fresh (< 60s)
+    // Return in-memory cached data if available and fresh (< 5 mins)
     if (!forceRefresh && cachedEntry && (now - cachedEntry.timestamp < CACHE_TTL_MS)) {
       return NextResponse.json({
         success: true,
@@ -116,8 +111,7 @@ export async function GET(req: NextRequest) {
 
     const db = getFirestore(adminApp);
 
-    // 1. Filter activities by manual types ('Call', 'Email', 'Note', 'Meeting', 'Task')
-    // This avoids fetching 180,000+ automated background 'Update' logs that take 60-80s
+    // 2. Query activities filtered by manual types and date
     let activityQuery = db.collectionGroup('activity')
       .where('type', 'in', ['Call', 'Email', 'Note', 'Meeting', 'Task'])
       .where('date', '>=', startISO);
@@ -129,7 +123,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 2. Fetch Users to identify active Dialers
+    // 3. Query users to identify active dialers
     const usersQuery = db.collection('users')
       .select('firstName', 'lastName', 'displayName', 'email', 'role', 'activeRole', 'assignedRoles', 'disabled');
 
@@ -141,7 +135,7 @@ export async function GET(req: NextRequest) {
       usersQuery.get()
     ]);
 
-    // Process User/Dialer List (strictly Outbound Dialers & Lead Gen reps, excluding AMs/Managers)
+    // Process user / dialer list
     const userList: string[] = [];
     usersSnap.docs.forEach(doc => {
       const data = doc.data();
@@ -177,18 +171,64 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const dialersParam = searchParams.get('dialers');
     const targetDialers = dialersParam 
       ? dialersParam.split(',').map(s => s.trim()).filter(Boolean)
       : userList;
 
-    // 3. Process Leads & Companies into Lean Objects with targeted fetching
+    // 4. Filter activities: Only keep manual activities, exclude automated bots
+    const validActivities: any[] = [];
+    const activeLeadIds = new Set<string>();
+
+    activitiesSnap.docs.forEach(doc => {
+      const data = doc.data();
+      if (!isManualActivity(data)) return;
+
+      let author = data.author || '';
+      if (author.trim().toLowerCase() === 'leeroy russell') {
+        author = 'Lee Russell';
+      }
+
+      const authorLower = author.toLowerCase();
+      const notesLower = (data.notes || '').toLowerCase();
+      if (
+        authorLower.includes('system') ||
+        authorLower.includes('script') ||
+        authorLower.includes('backfill') ||
+        authorLower.includes('nurture') ||
+        authorLower.includes('tracker') ||
+        authorLower.includes('operator') ||
+        notesLower.includes('performed by: system') ||
+        notesLower.includes('system backfill script')
+      ) {
+        return;
+      }
+
+      if (isDialerPerformanceOnly) {
+        const isTargetDialer = targetDialers.some(d => isDialerNameMatch(author, d));
+        if (!isTargetDialer) return;
+      }
+
+      const leadId = doc.ref.parent.parent?.id;
+      if (!leadId) return;
+
+      activeLeadIds.add(leadId);
+      validActivities.push({
+        id: doc.id,
+        leadId,
+        author: sanitizeString(author, 100),
+        notes: sanitizeString(data.notes, 250), // Truncate notes for lean payload
+        date: data.date || '',
+        type: data.type || 'Note',
+      });
+    });
+
+    // 5. Lean Lead fields (omits massive discoveryData to prevent memory overflow and datastore timeouts)
     const leadFields = [
       'companyName', 'status', 'customerStatus', 'dialerAssigned', 'salesRepAssigned',
       'franchisee', 'fieldSales', 'dateLeadEntered', 'createdAt', 'assignedToDialerAt',
       'visitNoteID', 'providedShipMateOnboarding', 'firstJobCreatedAt', 'jobCount',
       'localMileTrialsRemaining', 'localMileTermsAccepted', 'wasOutbound',
-      'discoveryData', 'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket',
+      'entityId', 'prospectPlusId', 'customerEntityId', 'internalid', 'bucket',
       'dateLocalmileAccepted', 'localMileAcceptedAt', 'dateRegistrationSent', 'registrationSentAt', 'bucketHistory',
       'customerSource', 'source', 'leadSource', 'wasInbound', 'inboundDetails', 'inboundPageUrl', 'pageURL'
     ];
@@ -198,6 +238,15 @@ export async function GET(req: NextRequest) {
     const processDoc = (doc: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot, isFromCompanies = false) => {
       const data = doc.data();
       if (!data) return null;
+
+      // Extract lean bucketHistory (only newBucket and changedAt for AM transitions)
+      const leanBucketHistory = Array.isArray(data.bucketHistory)
+        ? data.bucketHistory.map((h: any) => ({
+            newBucket: sanitizeString(h.newBucket || h.bucket, 50),
+            changedAt: h.changedAt || h.date || null,
+          }))
+        : [];
+
       return {
         id: doc.id,
         prospectPlusId: data.prospectPlusId || data.id || doc.id,
@@ -211,7 +260,6 @@ export async function GET(req: NextRequest) {
         fieldSales: data.fieldSales || false,
         dateLeadEntered: data.dateLeadEntered || data.createdAt || null,
         assignedToDialerAt: data.assignedToDialerAt || null,
-        discoveryData: deepSanitize(data.discoveryData),
         visitNoteID: data.visitNoteID || null,
         isFromCompaniesCollection: isFromCompanies,
         providedShipMateOnboarding: data.providedShipMateOnboarding || false,
@@ -223,17 +271,17 @@ export async function GET(req: NextRequest) {
         localMileAcceptedAt: data.localMileAcceptedAt || null,
         dateRegistrationSent: data.dateRegistrationSent || null,
         registrationSentAt: data.registrationSentAt || null,
-        bucketHistory: Array.isArray(data.bucketHistory) ? deepSanitize(data.bucketHistory) : [],
+        bucketHistory: leanBucketHistory,
         bucket: data.bucket || 'outbound',
         wasOutbound: data.wasOutbound || false,
         customerSource: data.customerSource || data.source || data.leadSource || null,
         wasInbound: data.wasInbound || false,
-        inboundDetails: typeof data.inboundDetails === 'object' ? deepSanitize(data.inboundDetails) : sanitizeString(data.inboundDetails, 200),
-        inboundPageUrl: sanitizeString(data.inboundPageUrl || data.pageURL, 200) || null,
+        inboundDetails: typeof data.inboundDetails === 'object' ? '' : sanitizeString(data.inboundDetails, 150),
+        inboundPageUrl: sanitizeString(data.inboundPageUrl || data.pageURL, 150) || null,
       };
     };
 
-    // Run targeted queries for dialer assigned leads (in chunks of 10 for Firestore 'in' limitation)
+    // 6. Targeted queries for dialer assigned leads
     const targetedLeadPromises: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
     const dialerChunks: string[][] = [];
     for (let i = 0; i < targetDialers.length; i += 10) {
@@ -259,23 +307,23 @@ export async function GET(req: NextRequest) {
       });
     });
 
-    // Also collect all active lead IDs from activities and appointments that may not have matched the above
-    const activeLeadIds = new Set<string>();
-    activitiesSnap.docs.forEach(doc => {
-      const leadId = doc.ref.parent.parent?.id;
-      if (leadId) activeLeadIds.add(leadId);
-    });
+    // Also include leads referenced by appointments
+    const cutoffDate = new Date(2026, 6, 1);
     apptsSnap.docs.forEach(doc => {
+      const data = doc.data();
+      const apptDate = parseDateString(data.starttime || data.duedate || data.date || data.appointmentDate || (data as any).createdAt);
+      if (apptDate && apptDate < cutoffDate) return;
       const leadId = doc.ref.parent.parent?.id;
       if (leadId) activeLeadIds.add(leadId);
     });
 
+    // 7. Fetch missing leads referenced by activities or appointments
     const missingLeadIds = Array.from(activeLeadIds).filter(id => !leadMap.has(id));
     if (missingLeadIds.length > 0) {
       const leadRefs = missingLeadIds.map(id => db.collection('leads').doc(id));
       const companyRefs = missingLeadIds.map(id => db.collection('companies').doc(id));
-      
-      const batchSize = 100;
+
+      const batchSize = 250;
       const allBatches: Promise<FirebaseFirestore.DocumentSnapshot[]>[] = [];
       for (let i = 0; i < leadRefs.length; i += batchSize) {
         allBatches.push(db.getAll(...leadRefs.slice(i, i + batchSize)));
@@ -303,7 +351,6 @@ export async function GET(req: NextRequest) {
     }
 
     const combinedLeads = Array.from(leadMap.values()).filter(l => {
-      // Must be in Outbound bucket, have Outbound history, or be assigned to an active dialer
       const currentBucket = (l.bucket || (l.fieldSales ? 'field_sales' : 'outbound')).toLowerCase();
       const isCurrentlyOutbound = currentBucket === 'outbound';
       const wasOutboundFlag = l.wasOutbound === true;
@@ -312,9 +359,7 @@ export async function GET(req: NextRequest) {
       );
 
       const isAssignedToActiveDialer = !!l.dialerAssigned && userList.some(dialerName => {
-        const dLower = dialerName.toLowerCase().trim().replace(/\bleeroy\b/g, 'lee');
-        const assignedLower = (l.dialerAssigned || '').toLowerCase().trim().replace(/\bleeroy\b/g, 'lee');
-        return assignedLower === dLower || assignedLower.startsWith(dLower) || dLower.startsWith(assignedLower);
+        return isDialerNameMatch(l.dialerAssigned, dialerName);
       });
 
       return isCurrentlyOutbound || wasOutboundFlag || wasInBucketHistory || isAssignedToActiveDialer;
@@ -323,42 +368,8 @@ export async function GET(req: NextRequest) {
     const activeLeadMap = new Map<string, any>();
     combinedLeads.forEach(l => activeLeadMap.set(l.id, l));
 
-    // Process Activities & Calls
-    const rawActivities: any[] = [];
-    activitiesSnap.docs.forEach(doc => {
-      const data = doc.data();
-      const leadId = doc.ref.parent.parent?.id;
-      if (!leadId) return;
-      const lead = activeLeadMap.get(leadId);
-      if (!lead) return;
-      if (!isManualActivity(data)) return;
-
-      let author = data.author || '';
-      if (author.trim().toLowerCase() === 'leeroy russell') {
-        author = 'Lee Russell';
-      }
-
-      const authorLower = author.toLowerCase();
-      const notesLower = (data.notes || '').toLowerCase();
-      if (
-        authorLower.includes('system') ||
-        authorLower.includes('script') ||
-        authorLower.includes('backfill') ||
-        notesLower.includes('performed by: system') ||
-        notesLower.includes('system backfill script')
-      ) {
-        return;
-      }
-
-      rawActivities.push({
-        id: doc.id,
-        leadId,
-        author: sanitizeString(author, 100),
-        notes: sanitizeString(data.notes, 1000),
-        date: data.date || '',
-        type: data.type || 'Note',
-      });
-    });
+    // 8. Process Activities & Calls
+    const rawActivities = validActivities.filter(a => activeLeadMap.has(a.leadId));
 
     const rawCalls = rawActivities
       .filter(a => a.type === 'Call')
@@ -408,8 +419,7 @@ export async function GET(req: NextRequest) {
       return dateB.getTime() - dateA.getTime();
     });
 
-    // Process Appointments
-    const cutoffDate = new Date(2026, 6, 1);
+    // 9. Process Appointments
     const appts: any[] = [];
     apptsSnap.docs.forEach(doc => {
       const data = doc.data();
@@ -441,7 +451,6 @@ export async function GET(req: NextRequest) {
         leadName: sanitizeString(lead.companyName, 200),
         dialerAssigned: sanitizeString(lead.dialerAssigned, 100),
         leadStatus: lead.status,
-        discoveryData: lead.discoveryData,
         entityId: lead.entityId,
         duedate: data.duedate || data.date || '',
         starttime: data.starttime || data.date || '',
@@ -450,7 +459,7 @@ export async function GET(req: NextRequest) {
         status: data.status || 'Scheduled',
         title: sanitizeString(data.title, 200),
         author: sanitizeString(data.author || data.createdBy, 100),
-        notes: sanitizeString(data.notes, 1000),
+        notes: sanitizeString(data.notes, 250),
         franchisee: sanitizeString(lead.franchisee, 100),
         statusCategory: data.statusCategory || '',
         trialOutcome: data.trialOutcome || '',
@@ -471,7 +480,7 @@ export async function GET(req: NextRequest) {
       dialers: userList,
     };
 
-    // Store query results in memory cache
+    // Store in memory cache
     memoryCacheMap.set(cacheKey, {
       timestamp: Date.now(),
       data: responseData,

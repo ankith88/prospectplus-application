@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table'
 import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/firebase'
 import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer'
+import { initiateOutboundCall, resolveUserTelephonyProvider } from '@/lib/telephony'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
 import type { Lead, LeadStatus, Note, Activity, UserProfile, Contact, Franchisee } from '@/lib/types'
 import { encryptLeadId } from '@/lib/localmile-security'
@@ -29,6 +30,7 @@ import { usePerformance } from '@/hooks/use-performance';
 import { useDialingSession } from '@/hooks/use-dialing-session'
 import { updateLeadDialerRep, logActivity, bulkUpdateLeadDialerRep, getAllUsers, getAllFranchisees, getLastNote, getLastActivity, deleteLead, bulkMoveLeadsToBucket, mergeLeads, mergeMultipleLeads, addLeadsToMarketingList } from '@/services/firebase'
 import { EnrichmentDialerReviewDialog } from '@/components/leads/enrichment-dialer-review-dialog'
+import { BatchEnrichmentDialog } from '@/components/leads/batch-enrichment-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck } from 'lucide-react'
@@ -160,10 +162,11 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
         if (!masterLead || selectedDuplicateIds.length === 0) return;
         setIsMerging(true);
         try {
-            await mergeMultipleLeads(masterLead.id, selectedDuplicateIds);
+            const result = await mergeMultipleLeads(masterLead.id, selectedDuplicateIds);
+            const lmNotice = result?.localMileMerged ? " Associated LocalMile Plus accounts and jobs were also merged." : "";
             toast({ 
                 title: "Success", 
-                description: `Successfully merged ${selectedDuplicateIds.length} duplicate lead(s) into ${masterLead.companyName}. Master lead main fields remain unchanged.` 
+                description: `Successfully merged ${selectedDuplicateIds.length} duplicate lead(s) into ${masterLead.companyName}. Master lead main fields remain unchanged.${lmNotice}` 
             });
             onMerged();
             onOpenChange(false);
@@ -184,7 +187,7 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
                     </DialogTitle>
                     <DialogDescription>
                         Select duplicate lead(s) to merge into Master record <strong>{masterLead?.companyName}</strong>. 
-                        Only subcollection records (contacts, notes, activity, tasks, emails, scorecards) will be merged — 
+                        Subcollection records (contacts, notes, activity, tasks, emails, scorecards, LocalMile jobs) and associated LocalMile Plus database accounts will be merged into the Master record — 
                         the Master lead's main collection fields will remain unchanged.
                     </DialogDescription>
                 </DialogHeader>
@@ -263,7 +266,7 @@ function MergeLeadsDialog({ masterLead, similarLeads, isOpen, onOpenChange, onMe
                         </p>
                         <p className="mt-0.5 text-[11px]">
                             {selectedDuplicateIds.length > 0
-                                ? `The ${selectedDuplicateIds.length} checked duplicate lead(s) will have their subcollections merged into ${masterLead?.companyName} and then be deleted. Master main fields will be preserved.`
+                                ? `The ${selectedDuplicateIds.length} checked duplicate lead(s) will have their subcollections and any associated LocalMile Plus accounts merged into ${masterLead?.companyName} and then be deleted. Master main fields will be preserved.`
                                 : 'No duplicate leads checked. Please select at least one duplicate lead to merge.'}
                         </p>
                     </div>
@@ -534,7 +537,8 @@ export default function LeadsClientPage({
   const [isStartingDialing, setIsStartingDialing] = useState(false);
   const [leadsToDelete, setLeadsToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isBatchEnriching, setIsBatchEnriching] = useState(false);
+  const [isBatchEnrichDialogOpen, setIsBatchEnrichDialogOpen] = useState(false);
+  const [batchEnrichTargetIds, setBatchEnrichTargetIds] = useState<string[]>([]);
   const [allUsersState, setAllUsersState] = useState<UserProfile[]>([]);
   const [allFranchiseesState, setAllFranchiseesState] = useState<Franchisee[]>([]);
   const [isEnrichmentReviewOpen, setIsEnrichmentReviewOpen] = useState(false);
@@ -1435,51 +1439,20 @@ export default function LeadsClientPage({
     }
   };
 
-  const handleBatchEnrich = async () => {
+  const handleBatchEnrich = () => {
     if (selectedLeads.length === 0) return;
-    const targetLeadIds = [...selectedLeads];
-    setIsBatchEnriching(true);
-    toast({
-      title: "Batch Enrichment Started",
-      description: `Analyzing and classifying ${targetLeadIds.length} leads with AI...`,
-    });
+    setBatchEnrichTargetIds([...selectedLeads]);
+    setIsBatchEnrichDialogOpen(true);
+  };
 
-    try {
-      const response = await fetch('/api/admin/leads/batch-enrich', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadIds: targetLeadIds,
-          requestorUid: userProfile?.uid || user?.uid,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to complete batch enrichment.');
-      }
-
-      const targetLeads = allLeads.filter(l => targetLeadIds.includes(l.id));
-
-      toast({
-        title: "Batch Enrichment Complete",
-        description: `Successfully enriched ${data.successCount} of ${data.total} leads. Select dialers to distribute...`,
-      });
-
-      setEnrichedLeadsToAssign(targetLeads);
+  const handleBatchEnrichComplete = (enrichedLeadIds: string[]) => {
+    const targetLeads = allLeads.filter(l => enrichedLeadIds.includes(l.id));
+    setEnrichedLeadsToAssign(targetLeads);
+    if (targetLeads.length > 0) {
       setIsEnrichmentReviewOpen(true);
-      setSelectedLeads([]);
-      handleRefresh();
-    } catch (error: any) {
-      console.error("Failed to batch enrich leads:", error);
-      toast({
-        variant: "destructive",
-        title: "Batch Enrichment Failed",
-        description: error.message || "Failed to batch enrich leads.",
-      });
-    } finally {
-      setIsBatchEnriching(false);
     }
+    setSelectedLeads([]);
+    handleRefresh();
   };
 
   const handleConfirmEnrichmentReassignments = async (
@@ -1649,16 +1622,18 @@ export default function LeadsClientPage({
   const [pendingDialData, setPendingDialData] = useState<DialerInsightsData | null>(null);
 
   const executeCall = (leadId: string, phoneNumber: string) => {
-    window.open(`aircall:${phoneNumber}`);
+    initiateOutboundCall(phoneNumber, userProfile);
+    const provider = resolveUserTelephonyProvider(userProfile);
+    const providerLabel = provider === 'dialpad' ? 'Dialpad' : 'AirCall';
     logActivity(leadId, { 
       type: 'Call', 
-      notes: `Initiated call to ${phoneNumber} via AirCall app.`,
+      notes: `Initiated call to ${phoneNumber} via ${providerLabel} app.`,
       author: user?.displayName || 'Unknown',
       email: user?.email || undefined,
       aircallStatus: 'initiated'
     });
     toast({
-        title: "Opening AirCall",
+        title: `Opening ${providerLabel}`,
         description: `Attempting to dial ${phoneNumber}...`,
     });
   };
@@ -2331,14 +2306,9 @@ export default function LeadsClientPage({
                     onClick={handleBatchEnrich} 
                     variant="outline" 
                     size="sm" 
-                    disabled={isBatchEnriching}
                     className="bg-[#095c7b]/10 text-[#095c7b] hover:bg-[#095c7b]/20 border-[#095c7b]/30 font-semibold"
                   >
-                    {isBatchEnriching ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />
-                    )}
+                    <Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />
                     Enrich with AI ({selectedLeads.length})
                   </Button>
                 </>
@@ -3151,6 +3121,14 @@ export default function LeadsClientPage({
           executeCall(pendingDialData.leadId || '', pendingDialData.phoneNumber || '');
         }
       }}
+    />
+    <BatchEnrichmentDialog
+      isOpen={isBatchEnrichDialogOpen}
+      onOpenChange={setIsBatchEnrichDialogOpen}
+      leadIds={batchEnrichTargetIds}
+      allLeads={allLeads}
+      requestorUid={userProfile?.uid || user?.uid}
+      onComplete={handleBatchEnrichComplete}
     />
     <EnrichmentDialerReviewDialog
       isOpen={isEnrichmentReviewOpen}

@@ -47,6 +47,7 @@ const formSchema = z.object({
   aircallUserId: z.string().optional(),
   dialpadPhoneNumber: z.string().optional(),
   dialpadUserId: z.string().optional(),
+  preferredTelephonyProvider: z.enum(['default', 'aircall', 'dialpad']).default('default'),
   linkedSalesRep: z.string().optional(),
   linkedBDR: z.string().optional(),
   franchisee: z.string().optional(),
@@ -93,6 +94,7 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
       aircallUserId: '',
       dialpadPhoneNumber: '',
       dialpadUserId: '',
+      preferredTelephonyProvider: 'default',
       linkedSalesRep: '',
       linkedBDR: '',
       franchisee: '',
@@ -504,6 +506,27 @@ export function CreateUserDialog({ isOpen, onOpenChange, onUserCreated }: Create
              )}/>
              {role !== 'Franchisee' && (
                <>
+                 <FormField control={form.control} name="preferredTelephonyProvider" render={({ field }) => (
+                     <FormItem>
+                       <FormLabel>Phone System Provider</FormLabel>
+                       <Select value={field.value} onValueChange={field.onChange}>
+                         <FormControl>
+                           <SelectTrigger>
+                             <SelectValue placeholder="Select Phone System" />
+                           </SelectTrigger>
+                         </FormControl>
+                         <SelectContent>
+                           <SelectItem value="default">🌐 System Default (Follows Global Switch)</SelectItem>
+                           <SelectItem value="dialpad">🟣 Dialpad (User Override)</SelectItem>
+                           <SelectItem value="aircall">🟢 AirCall (User Override)</SelectItem>
+                         </SelectContent>
+                       </Select>
+                       <FormDescription className="text-xs">
+                         Choose whether this user inherits the global telephony switch or is directly routed to Dialpad or AirCall.
+                       </FormDescription>
+                       <FormMessage />
+                     </FormItem>
+                 )}/>
                  <FormField control={form.control} name="aircallPhoneNumber" render={({ field }) => (
                      <FormItem><FormLabel>AirCall Number</FormLabel><FormControl><Input {...field} placeholder="e.g. +61298765432" /></FormControl><FormMessage /></FormItem>
                  )}/>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import type { UserProfile } from '@/lib/types';
+import { getAestDateString, hasLeaveEnded } from '@/lib/leave-utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,11 +24,43 @@ export function AmLeaveManagement() {
     setLoading(true);
     try {
       const usersRef = collection(firestore, 'users');
-      // Account Managers role check
-      const q = query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'));
-      const snap = await getDocs(q);
-      const ams = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-      setAccountManagers(ams);
+      // Fetch both 'Account Managers' and 'Account Manager' to cover role variations
+      const [snap1, snap2] = await Promise.all([
+        getDocs(query(usersRef, where('assignedRoles', 'array-contains', 'Account Managers'))),
+        getDocs(query(usersRef, where('assignedRoles', 'array-contains', 'Account Manager'))),
+      ]);
+      const amMap = new Map<string, UserProfile>();
+      snap1.docs.forEach(d => amMap.set(d.id, { uid: d.id, ...d.data() } as UserProfile));
+      snap2.docs.forEach(d => amMap.set(d.id, { uid: d.id, ...d.data() } as UserProfile));
+      const ams = Array.from(amMap.values());
+
+      const todayStr = getAestDateString();
+      const updatedAms = await Promise.all(
+        ams.map(async (am) => {
+          const profile = am.leaveProfile;
+          // If leave endDate is set and has passed, automatically revert to Available
+          if (profile?.isOnLeave && profile.endDate && todayStr > profile.endDate) {
+            const newProfile = {
+              ...profile,
+              isOnLeave: false,
+              stopAssignment: false,
+              startDate: '',
+              endDate: '',
+              backupAmName: '',
+            };
+            try {
+              const userRef = doc(firestore, 'users', am.uid);
+              await updateDoc(userRef, { leaveProfile: newProfile });
+            } catch (err) {
+              console.error(`Failed to auto-update expired leave for AM ${am.uid}:`, err);
+            }
+            return { ...am, leaveProfile: newProfile };
+          }
+          return am;
+        })
+      );
+
+      setAccountManagers(updatedAms);
     } catch (error) {
       console.error("Failed to fetch account managers", error);
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch Account Managers.' });
@@ -43,6 +76,20 @@ export function AmLeaveManagement() {
   const handleUpdateLeave = async (uid: string, newProfile: any) => {
     setSavingId(uid);
     try {
+      const todayStr = getAestDateString();
+      // If leave endDate has passed, automatically set isOnLeave to false
+      if (newProfile.isOnLeave && newProfile.endDate && todayStr > newProfile.endDate) {
+        newProfile.isOnLeave = false;
+        newProfile.stopAssignment = false;
+        newProfile.startDate = '';
+        newProfile.endDate = '';
+        newProfile.backupAmName = '';
+        toast({ 
+          title: 'Notice', 
+          description: 'The selected leave end date has passed. Status automatically set to Available.' 
+        });
+      }
+
       const userRef = doc(firestore, 'users', uid);
       await updateDoc(userRef, { leaveProfile: newProfile });
       setAccountManagers(prev => prev.map(am => am.uid === uid ? { ...am, leaveProfile: newProfile } : am));
@@ -81,6 +128,8 @@ export function AmLeaveManagement() {
         <TableBody>
           {accountManagers.map((am) => {
             const leaveProfile = am.leaveProfile || { isOnLeave: false, backupAmName: 'none', stopAssignment: false, startDate: '', endDate: '' };
+            const isExpired = hasLeaveEnded(leaveProfile);
+            const isEffectivelyOnLeave = leaveProfile.isOnLeave && !isExpired;
             
             // Backup AM options (exclude self)
             const backupOptions = accountManagers.filter(b => b.uid !== am.uid);
@@ -93,18 +142,25 @@ export function AmLeaveManagement() {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Switch 
-                      checked={leaveProfile.isOnLeave}
-                      onCheckedChange={(checked) => handleUpdateLeave(am.uid, { ...leaveProfile, isOnLeave: checked })}
+                      checked={isEffectivelyOnLeave}
+                      onCheckedChange={(checked) => {
+                        if (checked && isExpired) {
+                          // Clear previous expired dates so user can enter new dates
+                          handleUpdateLeave(am.uid, { ...leaveProfile, isOnLeave: true, startDate: '', endDate: '' });
+                        } else {
+                          handleUpdateLeave(am.uid, { ...leaveProfile, isOnLeave: checked });
+                        }
+                      }}
                       disabled={savingId === am.uid}
                     />
-                    <Badge variant={leaveProfile.isOnLeave ? 'destructive' : 'secondary'}>
-                      {leaveProfile.isOnLeave ? 'On Leave' : 'Available'}
+                    <Badge variant={isEffectivelyOnLeave ? 'destructive' : 'secondary'}>
+                      {isEffectivelyOnLeave ? 'On Leave' : 'Available'}
                     </Badge>
                   </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-2">
-                    {leaveProfile.isOnLeave ? (
+                    {isEffectivelyOnLeave ? (
                       <>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground w-10">Start:</span>
@@ -136,7 +192,7 @@ export function AmLeaveManagement() {
                   <Select 
                     value={leaveProfile.backupAmName || 'none'}
                     onValueChange={(val) => handleUpdateLeave(am.uid, { ...leaveProfile, backupAmName: val === 'none' ? '' : val })}
-                    disabled={!leaveProfile.isOnLeave || savingId === am.uid}
+                    disabled={!isEffectivelyOnLeave || savingId === am.uid}
                   >
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="Select Backup AM" />
@@ -153,12 +209,12 @@ export function AmLeaveManagement() {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Switch 
-                      checked={leaveProfile.stopAssignment}
+                      checked={Boolean(leaveProfile.stopAssignment && isEffectivelyOnLeave)}
                       onCheckedChange={(checked) => handleUpdateLeave(am.uid, { ...leaveProfile, stopAssignment: checked })}
-                      disabled={savingId === am.uid}
+                      disabled={!isEffectivelyOnLeave || savingId === am.uid}
                     />
                     <span className="text-sm text-muted-foreground">
-                      {leaveProfile.stopAssignment ? 'Yes' : 'No'}
+                      {(leaveProfile.stopAssignment && isEffectivelyOnLeave) ? 'Yes' : 'No'}
                     </span>
                   </div>
                 </TableCell>

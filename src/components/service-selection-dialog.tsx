@@ -43,6 +43,7 @@ import { CalendarIcon, UserPlus, Package, MousePointerClick, CheckCircle2, Circl
 import { getLeadInitialBucket } from '@/lib/lead-stage-analytics';
 import { Progress } from '@/components/ui/progress';
 import { isBankingServiceSelected, isH2hServiceSelected, getNearbyBanks, saveOrUpdateTaggedAddress, normalizeState, type BankLocationOption } from '@/lib/bank-utils';
+import { canAssignToAm } from '@/lib/leave-utils';
 import { GoogleAddressInput } from './google-address-input';
 import { Calendar } from './ui/calendar';
 import { OpenTrackingTips } from '@/components/ui/open-tracking-tips';
@@ -1804,12 +1805,12 @@ export function ServiceSelectionDialog({
             const poolNames = ["Lee Russell", "Kerina Helliwell"];
             const pool = ams.filter(am => poolNames.includes(am.displayName || `${am.firstName || ''} ${am.lastName || ''}`.trim()));
             
-            let availableAms = pool.filter(am => !(am.leaveProfile?.isOnLeave && am.leaveProfile?.stopAssignment));
+            let availableAms = pool.filter(am => canAssignToAm(am));
             
             if (availableAms.length === 0) {
                const backups = pool.map(am => am.leaveProfile?.backupAmName).filter(Boolean);
                if (backups.length > 0) {
-                   availableAms = ams.filter(am => backups.includes(am.displayName || `${am.firstName || ''} ${am.lastName || ''}`.trim()));
+                   availableAms = ams.filter(am => backups.includes(am.displayName || `${am.firstName || ''} ${am.lastName || ''}`.trim()) && canAssignToAm(am));
                }
             }
             

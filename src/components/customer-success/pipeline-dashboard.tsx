@@ -13,6 +13,7 @@ import { Loader } from '@/components/ui/loader';
 import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter, MapPin, Store, Search, Kanban, List, LayoutGrid, ArrowUpDown, TableProperties as TableIcon, UserCog, PhoneCall, Ban, Sparkles, Calendar, Clock } from 'lucide-react';
 import { parseISO, startOfDay } from 'date-fns';
 import { logActivity, logCallActivity, logCsCallActivity, updateLeadDetails } from '@/services/firebase';
+import { initiateOutboundCall, resolveUserTelephonyProvider } from '@/lib/telephony';
 import { deactivateLocalMileAccessForLead } from '@/services/localmile-deactivation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -756,10 +757,12 @@ export default function CustomerSuccessDashboard() {
     }, [filteredLeads, priorityLeads, quotesOut, quotesAccepted, productPending, localMilePending]);
     
     const handleCall = async (leadId: string, phone: string) => {
-        window.open(`aircall:${phone}`, '_self');
+        initiateOutboundCall(phone, userProfile);
+        const provider = resolveUserTelephonyProvider(userProfile);
+        const providerLabel = provider === 'dialpad' ? 'Dialpad' : 'AirCall';
         await logActivity(leadId, {
             type: 'Call',
-            notes: `Initiated call to ${phone} via AirCall from Customer Success Pipeline.`,
+            notes: `Initiated call to ${phone} via ${providerLabel} from Customer Success Pipeline.`,
             author: loggedInCsName || 'System'
         });
     };

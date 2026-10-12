@@ -62,7 +62,16 @@ export async function POST(req: NextRequest) {
         try {
           const res = await enrichLeadAction(id);
           if (res.success) {
-            return { leadId: id, success: true };
+            return {
+              leadId: id,
+              success: true,
+              companyName: res.data?.companyName,
+              ecommercePlatform: res.data?.shopifyDetected,
+              hasMultipleBranches: res.data?.hasMultipleBranches,
+              totalBranchCount: res.data?.totalBranchCount,
+              hasPoBox: res.data?.hasPoBox,
+              industryCategory: res.data?.industryCategory,
+            };
           } else {
             return { leadId: id, success: false, error: res.error };
           }

@@ -23,6 +23,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader } from '@/components/ui/loader';
 import { useToast } from '@/hooks/use-toast';
 import { logActivity } from '@/services/firebase';
+import { initiateOutboundCall } from '@/lib/telephony';
+import { sendFieldSalesOutcomeToNetSuite } from '@/services/netsuite-field-sales-proxy';
 import { ServiceSelectionDialog } from '@/components/service-selection-dialog';
 import { 
   ListTodo, 
@@ -457,7 +459,7 @@ export default function CSRequestsDashboard() {
 
   const handleInitiateCall = (phoneNumber: string) => {
     if (!phoneNumber) return;
-    window.open(`aircall:${phoneNumber}`);
+    initiateOutboundCall(phoneNumber, userProfile);
   };
 
   // Process Change of Service (Applies new services & completes request)
@@ -752,6 +754,50 @@ export default function CSRequestsDashboard() {
 
         // Deactivate LocalMile access if applicable
         await deactivateLocalMileAccessForLead(selectedRequest.leadId, undefined, cancelCompSnap.exists() ? 'companies' : 'leads');
+
+        // Call NetSuite outcome sync with Customer - Lost outcome (Script 2514)
+        try {
+          const leadData = (cancelCompSnap.exists() ? cancelCompSnap.data() : cancelLeadSnap.data()) || {};
+          const nsRes = await sendFieldSalesOutcomeToNetSuite({
+            leadId: selectedRequest.leadId,
+            outcome: "Customer - Lost",
+            linkedSalesRep: leadData?.salesRepAssigned || leadData?.accountManagerAssigned || 'Unassigned',
+            processedBy: userDisplayName,
+            cancellationTheme: themeName,
+            cancellationWhy: whyName,
+            cancellationReason: reasonName,
+            cancellationDate: trueCancellationDate,
+            cancellationNotes: cancelNotes,
+          });
+
+          if (nsRes.success) {
+            const syncUpdates = {
+              netsuiteLeadStatus: 'Customer - Lost',
+              syncedWithNetSuite: true,
+              lastSyncedWithNetSuite: new Date().toISOString()
+            };
+            if (cancelCompSnap.exists()) await updateDoc(cancelCompRef, syncUpdates);
+            if (cancelLeadSnap.exists()) await updateDoc(cancelLeadRef, syncUpdates);
+          }
+        } catch (nsErr) {
+          console.error("[CS Requests] NetSuite outcome sync failed during true cancellation:", nsErr);
+        }
+
+        // Trigger LPO cancellation cascade (child cancellation & LPO.Plus access disabling)
+        try {
+          await fetch('/api/companies/cancel-cascade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              leadId: selectedRequest.leadId,
+              companyName: selectedRequest.companyName,
+              cancellationReason: reasonName,
+              cancelledBy: userDisplayName
+            })
+          });
+        } catch (cascadeErr) {
+          console.error("[CS Requests] Error triggering LPO cancellation cascade:", cascadeErr);
+        }
 
         // Trigger automated Franchisee Email Notification (Cancelled)
         fetch('/api/notifications/email', {

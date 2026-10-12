@@ -15,6 +15,7 @@ import { Phone, Building, User as UserIcon, AlertCircle, Mail, FileText, Filter,
 import { parseISO, startOfDay, format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { logActivity, updateLeadDetails } from '@/services/firebase';
+import { initiateOutboundCall, resolveUserTelephonyProvider } from '@/lib/telephony';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -744,11 +745,13 @@ export default function PipelineDashboard() {
     }, [filteredLeads]);
     
     const handleCall = async (leadId: string, phone: string) => {
-        window.open(`aircall:${phone}`, '_self');
+        initiateOutboundCall(phone, userProfile);
+        const provider = resolveUserTelephonyProvider(userProfile);
+        const providerLabel = provider === 'dialpad' ? 'Dialpad' : 'AirCall';
         const nowStr = new Date().toISOString();
         await logActivity(leadId, {
             type: 'Call',
-            notes: `Initiated call to ${phone} via AirCall from AM Pipeline.`,
+            notes: `Initiated call to ${phone} via ${providerLabel} from AM Pipeline.`,
             author: loggedInAmName || 'System',
             date: nowStr
         });

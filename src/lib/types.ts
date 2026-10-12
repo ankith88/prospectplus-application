@@ -481,6 +481,7 @@ export interface UserProfile {
   aircallUserId?: string
   dialpadPhoneNumber?: string
   dialpadUserId?: string
+  preferredTelephonyProvider?: 'default' | 'aircall' | 'dialpad'
   salesRepId?: string
   accountManagerId?: string
   netsuiteId?: string

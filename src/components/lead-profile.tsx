@@ -101,6 +101,7 @@ import type { Lead, Contact, Activity, Note, Transcript, Task, DiscoveryData, Ap
 import { prospectWebsiteTool } from '@/ai/flows/prospect-website-tool'
 import { generateNextBestAction } from '@/ai/flows/next-best-action'
 import { gatherCompanyInsights } from '@/ai/flows/gather-company-insights'
+import { initiateOutboundCall, resolveUserTelephonyProvider } from '@/lib/telephony'
 import { logActivity, updateLeadAvatar, updateLeadStatus, updateLeadDialerRep, getLeadFromFirebase, addTaskToLead, updateTaskInLead, updateTaskCompletion, deleteTaskFromLead, updateLeadDiscoveryData, logCallActivity, deleteLead, getLastNote, getLastActivity, updateLeadFieldSales, updateLeadDetails, updateContactInLead, updateLeadNextBestAction, deleteContactFromLead, getScfRecords, updateScfStatus, updateScfPdfUrl, logBucketChange, addCompanyInsight, getAllUsers, setupMultiFranchiseeArchitecture, getSiblingLeads, ensureLeadFranchiseeId, deleteAdditionalAddress, updateNoteActivity, mergeMultipleLeads, dismissDuplicateWarning, getOperatorsForFranchisee, getCompanyFromFirebase, getServices, isLostLeadStatus, getPendingItemsForLead, resolvePendingItemsForLead, getAllFranchisees } from '@/services/firebase'
 import { ResolvePendingItemsModal, type AppointmentResolution, type TaskResolution } from '@/components/resolve-pending-items-modal'
 import { evaluateDuplicateScore, extractCoreBrandName, normalizeCompanyName } from '@/lib/duplicate-detector'
@@ -4190,10 +4191,12 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
   const executeCall = (targetLeadId: string, phoneNumber: string) => {
     if (!phoneNumber) return;
-    window.open(`aircall:${phoneNumber}`);
+    initiateOutboundCall(phoneNumber, userProfile);
+    const provider = resolveUserTelephonyProvider(userProfile);
+    const providerLabel = provider === 'dialpad' ? 'Dialpad' : 'AirCall';
     logActivity(targetLeadId, { 
         type: 'Call', 
-        notes: `Initiated call to ${phoneNumber} via AirCall app.`,
+        notes: `Initiated call to ${phoneNumber} via ${providerLabel} app.`,
         author: user?.displayName || 'Unknown',
         email: user?.email || undefined,
         aircallStatus: 'initiated'
@@ -7003,15 +7006,29 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                             )}
                                                         </div>
                                                         {contact.phone && (
-                                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                                            <div className="flex items-center gap-1.5 text-muted-foreground">
                                                                 <Phone className="h-3 w-3" />
                                                                 <span>{contact.phone}</span>
+                                                                <CopyButton 
+                                                                    textToCopy={contact.phone} 
+                                                                    className="h-4 w-4 ml-0.5 text-muted-foreground hover:text-foreground" 
+                                                                    iconClassName="h-2.5 w-2.5" 
+                                                                    toastTitle="Copied" 
+                                                                    toastDescription="Phone number copied to clipboard." 
+                                                                />
                                                             </div>
                                                         )}
                                                         {contact.email && (
-                                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                                            <div className="flex items-center gap-1.5 text-muted-foreground">
                                                                 <Mail className="h-3 w-3" />
                                                                 <span>{contact.email}</span>
+                                                                <CopyButton 
+                                                                    textToCopy={contact.email} 
+                                                                    className="h-4 w-4 ml-0.5 text-muted-foreground hover:text-foreground" 
+                                                                    iconClassName="h-2.5 w-2.5" 
+                                                                    toastTitle="Copied" 
+                                                                    toastDescription="Email copied to clipboard." 
+                                                                />
                                                             </div>
                                                         )}
                                                     </div>
@@ -8666,12 +8683,21 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <Mail className="w-3 h-3 text-muted-foreground" />
                                         {contact.email ? (
-                                            <button 
-                                                onClick={() => handleEmailClick(contact.email)} 
-                                                className="text-primary hover:underline font-semibold text-left"
-                                            >
-                                                {contact.email}
-                                            </button>
+                                            <div className="inline-flex items-center gap-1">
+                                                <button 
+                                                    onClick={() => handleEmailClick(contact.email)} 
+                                                    className="text-primary hover:underline font-semibold text-left"
+                                                >
+                                                    {contact.email}
+                                                </button>
+                                                <CopyButton 
+                                                    textToCopy={contact.email} 
+                                                    className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                                                    iconClassName="h-3 w-3" 
+                                                    toastTitle="Copied" 
+                                                    toastDescription="Email copied to clipboard." 
+                                                />
+                                            </div>
                                         ) : (
                                             <span className="text-muted-foreground">-</span>
                                         )}
@@ -8718,7 +8744,77 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             </>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2"><Phone className="w-3 h-3" />{contact.phone} <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateCall(lead.id, contact.phone)}><PhoneCall className="h-3 w-3" /></Button>{!isUserRole && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleInitiateSms(contact.phone, contact.name)}><MessageSquare className="h-3 w-3" /></Button>}</div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <Phone className="w-3 h-3 text-muted-foreground" />
+                                        {contact.phone ? (
+                                            <>
+                                                <span>{contact.phone}</span>
+                                                <CopyButton 
+                                                    textToCopy={contact.phone} 
+                                                    className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                                                    iconClassName="h-3 w-3" 
+                                                    toastTitle="Copied" 
+                                                    toastDescription="Phone number copied to clipboard." 
+                                                />
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6 text-muted-foreground hover:text-foreground" 
+                                                    onClick={() => handleInitiateCall(lead.id, contact.phone)}
+                                                    title="Call"
+                                                >
+                                                    <PhoneCall className="h-3 w-3" />
+                                                </Button>
+                                                {!isUserRole && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-6 w-6 text-muted-foreground hover:text-foreground" 
+                                                        onClick={() => handleInitiateSms(contact.phone, contact.name)}
+                                                        title="Send SMS"
+                                                    >
+                                                        <MessageSquare className="h-3 w-3" />
+                                                    </Button>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <span className="text-muted-foreground">-</span>
+                                        )}
+                                    </div>
+                                    {(contact as any).mobile && (contact as any).mobile !== contact.phone && (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <Phone className="w-3 h-3 text-muted-foreground" />
+                                            <span className="text-muted-foreground text-xs">Mobile:</span>
+                                            <span>{(contact as any).mobile}</span>
+                                            <CopyButton 
+                                                textToCopy={(contact as any).mobile} 
+                                                className="h-5 w-5 text-muted-foreground hover:text-foreground" 
+                                                iconClassName="h-3 w-3" 
+                                                toastTitle="Copied" 
+                                                toastDescription="Mobile number copied to clipboard." 
+                                            />
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-6 w-6 text-muted-foreground hover:text-foreground" 
+                                                onClick={() => handleInitiateCall(lead.id, (contact as any).mobile)}
+                                                title="Call"
+                                            >
+                                                <PhoneCall className="h-3 w-3" />
+                                            </Button>
+                                            {!isUserRole && (
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-6 w-6 text-muted-foreground hover:text-foreground" 
+                                                    onClick={() => handleInitiateSms((contact as any).mobile, contact.name)}
+                                                    title="Send SMS"
+                                                >
+                                                    <MessageSquare className="h-3 w-3" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
                                     
                                     {contact.localMilePlusAuthLink && contact.securityCode && (
                                         <div className="mt-3 pt-2 border-t border-muted-foreground/20 space-y-1 text-xs">
@@ -12311,10 +12407,11 @@ function MergeDuplicatesDialog({
 
         setIsMerging(true);
         try {
-            await mergeMultipleLeads(selectedTargetId, validSourceIds);
+            const result = await mergeMultipleLeads(selectedTargetId, validSourceIds);
+            const lmNotice = result?.localMileMerged ? " Associated LocalMile Plus accounts and jobs were also merged." : "";
             toast({
                 title: "Merge Successful",
-                description: `Successfully merged ${validSourceIds.length} duplicate lead(s) into ${selectedLead?.companyName}. Master lead main fields were kept unchanged.`,
+                description: `Successfully merged ${validSourceIds.length} duplicate lead(s) into ${selectedLead?.companyName}. Master lead main fields were kept unchanged.${lmNotice}`,
             });
             onMerged(selectedTargetId);
             onOpenChange(false);
@@ -12363,7 +12460,7 @@ function MergeDuplicatesDialog({
                         <Building className="h-5 w-5" /> Compare & Merge Duplicate Leads
                     </DialogTitle>
                     <DialogDescription>
-                        Review candidate lead records below. Choose which lead to retain as Master and select which duplicate leads to merge into it. Only subcollection records (contacts, activities, notes, tasks, transcripts, and emails) will be merged — the Master lead's main collection fields will remain unchanged.
+                        Review candidate lead records below. Choose which lead to retain as Master and select which duplicate leads to merge into it. Subcollection records (contacts, activities, notes, tasks, transcripts, emails, LocalMile jobs) and associated LocalMile Plus database accounts will be merged into the Master record — the Master lead's main collection fields will remain unchanged.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -12502,7 +12599,7 @@ function MergeDuplicatesDialog({
                             <p>• Master Lead: <strong>{selectedLead.companyName}</strong> (ID: <code className="text-[10px] bg-amber-100 px-1 rounded">{selectedLead.id}</code>). <strong>Main lead fields will remain unchanged.</strong></p>
                             
                             {selectedSourcesList.length > 0 ? (
-                                <p>• <strong>{selectedSourcesList.length} Duplicate Lead(s) to Merge:</strong> {selectedSourcesList.map(s => s.companyName).join(', ')}. Only subcollection records (contacts, activities, notes, tasks, transcripts, scorecards, and emails) will be transferred, and these source lead records will be deleted.</p>
+                                <p>• <strong>{selectedSourcesList.length} Duplicate Lead(s) to Merge:</strong> {selectedSourcesList.map(s => s.companyName).join(', ')}. Subcollection records and any associated LocalMile Plus database accounts will be transferred into the Master lead, and these source lead records will be deleted.</p>
                             ) : (
                                 <p className="text-red-700 font-semibold">• No duplicate leads currently selected to merge. Please select at least one candidate lead above.</p>
                             )}

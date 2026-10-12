@@ -357,7 +357,46 @@ export const onLeadCreated = functions
 
     let am = data.accountManagerAssigned;
     if (!am) {
-      am = Math.random() < 0.5 ? 'Lee Russell' : 'Kerina Helliwell';
+      try {
+        const poolNames = ['Lee Russell', 'Kerina Helliwell'];
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
+        const usersSnap = await db.collection('users').get();
+        const poolUsers = usersSnap.docs
+          .map(d => ({ id: d.id, ...d.data() } as any))
+          .filter(u => {
+            const name = u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim();
+            return poolNames.includes(name);
+          });
+
+        const availableUsers = poolUsers.filter(u => {
+          const lp = u.leaveProfile;
+          if (!lp || !lp.isOnLeave) return true;
+          // If leave ended, user is available
+          if (lp.endDate && todayStr > lp.endDate) return true;
+          // If stopAssignment is enabled and currently in leave period, not available
+          if (lp.stopAssignment) {
+            if (lp.startDate && todayStr < lp.startDate) return true;
+            return false;
+          }
+          return true;
+        });
+
+        if (availableUsers.length > 0) {
+          const chosen = availableUsers[Math.floor(Math.random() * availableUsers.length)];
+          am = chosen.displayName || `${chosen.firstName || ''} ${chosen.lastName || ''}`.trim();
+        } else {
+          // If all pool users are on leave, check if any backup is configured
+          const backups = poolUsers.map(u => u.leaveProfile?.backupAmName).filter(Boolean);
+          if (backups.length > 0) {
+            am = backups[0];
+          } else {
+            am = Math.random() < 0.5 ? 'Lee Russell' : 'Kerina Helliwell';
+          }
+        }
+      } catch (err) {
+        functions.logger.error("Error evaluating AM leave in onLeadCreated:", err);
+        am = Math.random() < 0.5 ? 'Lee Russell' : 'Kerina Helliwell';
+      }
       updates.accountManagerAssigned = am;
       updates.salesRepAssigned = am;
       functions.logger.info(`Assigned AM/SalesRep ${am} to new lead ${context.params.leadId}`);
@@ -1550,6 +1589,55 @@ function checkHasPostalAddress(data: any): boolean {
   const p = data.postalAddress;
   return !!(p.street || p.address1 || p.city || p.zip);
 }
+
+/**
+ * Scheduled Cloud Function that runs daily at midnight Sydney time
+ * to automatically set expired Account Manager leaves to Available.
+ */
+export const checkExpiredAmLeave = functions
+  .region("australia-southeast1")
+  .pubsub.schedule("0 0 * * *")
+  .timeZone("Australia/Sydney")
+  .onRun(async () => {
+    functions.logger.info("Executing checkExpiredAmLeave scheduled job...");
+    const db = admin.firestore();
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' });
+
+    try {
+      const usersSnap = await db.collection("users").get();
+      const batch = db.batch();
+      let updatedCount = 0;
+
+      for (const docSnap of usersSnap.docs) {
+        const u = docSnap.data();
+        const lp = u.leaveProfile;
+        if (lp?.isOnLeave && lp.endDate && todayStr > lp.endDate) {
+          const newProfile = {
+            ...lp,
+            isOnLeave: false,
+            stopAssignment: false,
+            startDate: '',
+            endDate: '',
+            backupAmName: '',
+          };
+          batch.update(docSnap.ref, { leaveProfile: newProfile });
+          updatedCount++;
+          functions.logger.info(`Auto-reverted expired leave to Available for user ${docSnap.id} (${u.displayName || u.email})`);
+        }
+      }
+
+      if (updatedCount > 0) {
+        await batch.commit();
+        functions.logger.info(`Successfully reset ${updatedCount} expired AM leave profiles.`);
+      } else {
+        functions.logger.info("No expired AM leave profiles found.");
+      }
+    } catch (err) {
+      functions.logger.error("Failed to check and reset expired AM leaves:", err);
+    }
+    return null;
+  });
+
 
 
 

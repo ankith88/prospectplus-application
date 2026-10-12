@@ -577,6 +577,10 @@ export default function ReportsClientPage({
         let startISO = '';
         if (appliedFilters.activityDate?.from) {
             startISO = startOfDay(appliedFilters.activityDate.from).toISOString();
+        } else if (isDialerPerformanceOnly) {
+            // For dialer performance, only recent timeframes (today, yesterday, this week, last week, monthly) are viewed
+            const d = new Date();
+            startISO = startOfMonth(subMonths(d, 1)).toISOString();
         } else if (appliedFilters.dialerAssignmentDate?.from) {
             startISO = startOfDay(appliedFilters.dialerAssignmentDate.from).toISOString();
         } else if (appliedFilters.leadCreatedDate?.from) {
@@ -609,7 +613,12 @@ export default function ReportsClientPage({
             if (isRefreshing) {
                 queryParams.set('refresh', 'true');
             }
-            const apiRes = await fetch(`/api/admin/outbound-reporting?${queryParams.toString()}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 35000);
+            const apiRes = await fetch(`/api/admin/outbound-reporting?${queryParams.toString()}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
             if (apiRes.ok) {
                 const json = await apiRes.json();
                 if (json && json.success && json.data) {
@@ -627,12 +636,17 @@ export default function ReportsClientPage({
                     setLoadTime(Math.round(performance.now() - startTimePerf));
                     return;
                 }
+            } else {
+                console.warn(`Outbound Reporting API returned status ${apiRes.status}`);
             }
-        } catch (apiErr) {
+        } catch (apiErr: any) {
             console.warn("Outbound Reporting API fetch failed, falling back to client queries:", apiErr);
         }
 
-        const activityQueryConstraints: any[] = [where('date', '>=', startISO)];
+        const activityQueryConstraints: any[] = [
+            where('date', '>=', startISO),
+            limit(2500)
+        ];
         if (appliedFilters.activityDate?.to) {
           const endISO = endOfDay(appliedFilters.activityDate.to).toISOString();
           activityQueryConstraints.push(where('date', '<=', endISO));
@@ -644,7 +658,8 @@ export default function ReportsClientPage({
         );
 
         const apptQuery = query(
-            collectionGroup(firestore, 'appointments')
+            collectionGroup(firestore, 'appointments'),
+            limit(1500)
         );
 
         const fetches: Promise<any>[] = [
@@ -759,9 +774,11 @@ export default function ReportsClientPage({
             };
 
             if (activeLeadIds.size > 0) {
+                // Safeguard client fallback to at most 600 leads to prevent browser datastore timeout
+                const idsToFetch = Array.from(activeLeadIds).slice(0, 600);
                 const [leadsBatch, companiesBatch] = await Promise.all([
-                    fetchInBatches(Array.from(activeLeadIds), false),
-                    fetchInBatches(Array.from(activeLeadIds), true)
+                    fetchInBatches(idsToFetch, false),
+                    fetchInBatches(idsToFetch, true)
                 ]);
                 leadsDocs = leadsBatch;
                 companiesDocs = companiesBatch;

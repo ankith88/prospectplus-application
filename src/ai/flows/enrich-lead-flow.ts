@@ -677,6 +677,7 @@ export async function enrichLeadAction(leadId: string) {
       data: {
         ...enrichment,
         leadId,
+        companyName,
       },
     };
   } catch (error: any) {

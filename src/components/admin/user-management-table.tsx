@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader } from '../ui/loader';
 import { getAllUsers, updateUser, getAllFranchisees, deleteUserCompletely, unlinkUserFromFranchiseeCompletely } from '@/services/firebase';
-import { Lock, Mail, MailCheck, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone, Filter, User, RotateCcw, ChevronsUpDown, Check } from 'lucide-react';
+import { Lock, Mail, MailCheck, UserX, UserCheck, Edit, Search, ArrowUpDown, LogOut, CheckSquare, X, BellRing, Clock, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, Trash2, Unlink, Key, Eye, EyeOff, RefreshCw, Plus, Building2, Store, Smartphone, Filter, User, RotateCcw, ChevronsUpDown, Check, Phone } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { SUPER_ADMIN_UIDS } from '@/lib/constants';
 import { CreateUserDialog } from './create-user-dialog';
@@ -31,6 +31,7 @@ import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 export interface LinkedFranchiseeStateItem {
@@ -93,6 +94,8 @@ export function UserManagementTable() {
   const [newAircallPhoneNumber, setNewAircallPhoneNumber] = useState('');
   const [newDialpadPhoneNumber, setNewDialpadPhoneNumber] = useState('');
   const [newDialpadUserId, setNewDialpadUserId] = useState('');
+  const [newPreferredTelephonyProvider, setNewPreferredTelephonyProvider] = useState<'default' | 'aircall' | 'dialpad'>('default');
+  const [isBulkSettingTelephony, setIsBulkSettingTelephony] = useState(false);
   const [allFranchisees, setAllFranchisees] = useState<Franchisee[]>([]);
 
   // Email Verification State
@@ -231,6 +234,7 @@ export function UserManagementTable() {
       setNewAircallPhoneNumber(userToEdit.aircallPhoneNumber || '');
       setNewDialpadPhoneNumber(userToEdit.dialpadPhoneNumber || '');
       setNewDialpadUserId(userToEdit.dialpadUserId || '');
+      setNewPreferredTelephonyProvider(userToEdit.preferredTelephonyProvider || 'default');
       setNewFranchiseeRole(userToEdit.franchiseeRole || linkedFran?.relationship || 'owner');
       setNewPersonalEmail(userToEdit.personalEmail || '');
       setNewAbn(userToEdit.abn || '');
@@ -369,6 +373,26 @@ export function UserManagementTable() {
       toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally {
       setIsBulkVerifying(false);
+    }
+  };
+
+  const handleBulkSetTelephonyProvider = async (provider: 'default' | 'aircall' | 'dialpad') => {
+    if (!selectedUserIds.length) return;
+    setIsBulkSettingTelephony(true);
+    try {
+      await Promise.all(
+        selectedUserIds.map(uid => updateUser(uid, { preferredTelephonyProvider: provider }))
+      );
+      setUsers(prev => prev.map(u => selectedUserIds.includes(u.uid) ? { ...u, preferredTelephonyProvider: provider } : u));
+      toast({
+        title: 'Phone System Updated',
+        description: `Successfully updated ${selectedUserIds.length} user(s) to ${provider === 'dialpad' ? 'Dialpad' : provider === 'aircall' ? 'AirCall' : 'System Default'}.`,
+      });
+      setSelectedUserIds([]);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Update Failed', description: err.message || 'Could not update phone system.' });
+    } finally {
+      setIsBulkSettingTelephony(false);
     }
   };
 
@@ -585,6 +609,7 @@ export function UserManagementTable() {
         aircallPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newAircallPhoneNumber,
         dialpadPhoneNumber: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadPhoneNumber,
         dialpadUserId: effectiveAssignedRoles.includes('Franchisee') ? '' : newDialpadUserId,
+        preferredTelephonyProvider: effectiveAssignedRoles.includes('Franchisee') ? 'default' : newPreferredTelephonyProvider,
       };
       const isUnlinkingFranchisee = newFranchiseeId === 'none' || 
         (!effectiveAssignedRoles.includes('Franchisee') && !!(userToEdit.franchiseeId || userToEdit.franchisee || userToEdit.linkedFranchiseeIds?.length));
@@ -1092,6 +1117,28 @@ export function UserManagementTable() {
                   {isBulkVerifying ? <Loader className="mr-2 h-4 w-4" /> : <ShieldCheck className="mr-2 h-4 w-4 text-emerald-600" />}
                   Mark Verified
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={isBulkSettingTelephony}>
+                      {isBulkSettingTelephony ? <Loader className="mr-2 h-4 w-4" /> : <Phone className="mr-2 h-4 w-4 text-[#095c7b] dark:text-[#38bdf8]" />}
+                      Phone System
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleBulkSetTelephonyProvider('dialpad')} className="cursor-pointer">
+                      <span className="w-2 h-2 rounded-full bg-purple-600 mr-2"></span>
+                      Route to Dialpad
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkSetTelephonyProvider('aircall')} className="cursor-pointer">
+                      <span className="w-2 h-2 rounded-full bg-teal-600 mr-2"></span>
+                      Route to AirCall
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkSetTelephonyProvider('default')} className="cursor-pointer">
+                      <span className="w-2 h-2 rounded-full bg-slate-400 mr-2"></span>
+                      Reset to System Default
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button variant="outline" size="sm" onClick={() => setShowBulkLogoutConfirm(true)}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Log Out
@@ -1516,6 +1563,7 @@ export function UserManagementTable() {
                 </TableHead>
                 <TableHead>Admin Approval</TableHead>
                 <TableHead>Franchise</TableHead>
+                <TableHead>Phone System</TableHead>
                 <TableHead>2FA</TableHead>
                 <TableHead>Email Verified</TableHead>
                 <TableHead>Status</TableHead>
@@ -1580,6 +1628,19 @@ export function UserManagementTable() {
                         </div>
                       ) : (
                         <span>{user.franchisee || '-'}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {user.preferredTelephonyProvider === 'dialpad' ? (
+                        <Badge className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 whitespace-nowrap text-[11px] font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600 mr-1.5 inline-block"></span> Dialpad
+                        </Badge>
+                      ) : user.preferredTelephonyProvider === 'aircall' ? (
+                        <Badge className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300 whitespace-nowrap text-[11px] font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-600 mr-1.5 inline-block"></span> AirCall
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs font-normal">Default</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -1714,7 +1775,7 @@ export function UserManagementTable() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={11} className="h-32 text-center text-muted-foreground">
                     <div className="flex flex-col items-center justify-center gap-2 py-6">
                       <p className="font-medium text-foreground">No users found</p>
                       <p className="text-xs text-muted-foreground max-w-md">
@@ -2251,6 +2312,25 @@ export function UserManagementTable() {
                  </div>
                  {!newAssignedRoles.includes('Franchisee') && (
                    <>
+                   <div className="space-y-2">
+                       <Label htmlFor="telephony-provider">Phone System Provider</Label>
+                       <Select 
+                         value={newPreferredTelephonyProvider} 
+                         onValueChange={(val: any) => setNewPreferredTelephonyProvider(val)}
+                       >
+                         <SelectTrigger id="telephony-provider" className="bg-background">
+                           <SelectValue placeholder="Select Phone System" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           <SelectItem value="default">🌐 System Default (Follows Global Switch)</SelectItem>
+                           <SelectItem value="dialpad">🟣 Dialpad (User Override)</SelectItem>
+                           <SelectItem value="aircall">🟢 AirCall (User Override)</SelectItem>
+                         </SelectContent>
+                       </Select>
+                       <p className="text-[11px] text-muted-foreground">
+                         Controls whether this user inherits the global switch or is directly routed to Dialpad or AirCall.
+                       </p>
+                   </div>
                    <div className="space-y-2">
                        <Label htmlFor="aircall-number">AirCall Number</Label>
                        <Input id="aircall-number" value={newAircallPhoneNumber} onChange={(e) => setNewAircallPhoneNumber(e.target.value)} placeholder="e.g. +61298765432" />

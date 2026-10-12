@@ -18,9 +18,12 @@ import {
   RefreshCw,
   Zap,
   Globe,
-  Radio
+  Radio,
+  Users,
+  ExternalLink
 } from 'lucide-react';
-import type { TelephonyProviderType, TelephonySettings } from '@/lib/types';
+import type { TelephonyProviderType, TelephonySettings, UserProfile } from '@/lib/types';
+import { getAllUsers } from '@/services/firebase';
 
 export default function TelephonySettingsPage() {
   const { userProfile, loading: authLoading, isSuperAdmin } = useAuth();
@@ -29,6 +32,8 @@ export default function TelephonySettingsPage() {
   const [settings, setSettings] = useState<TelephonySettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [switchingProvider, setSwitchingProvider] = useState(false);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   // Testing states
   const [testingAirCall, setTestingAirCall] = useState(false);
@@ -52,6 +57,23 @@ export default function TelephonySettingsPage() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const userList = await getAllUsers();
+      setUsers(userList || []);
+    } catch (err: any) {
+      console.error('Failed to load users for telephony summary:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const refreshAll = () => {
+    fetchSettings();
+    fetchUsers();
+  };
+
   useEffect(() => {
     if (!authLoading && !isSuperAdmin) {
       router.replace('/leads');
@@ -59,6 +81,7 @@ export default function TelephonySettingsPage() {
     }
     if (isSuperAdmin) {
       fetchSettings();
+      fetchUsers();
     }
   }, [authLoading, isSuperAdmin, router]);
 
@@ -149,6 +172,10 @@ export default function TelephonySettingsPage() {
   const dialpadWebhookUrl = `https://prospectplus.com.au/api/dialpad/webhook/${process.env.NEXT_PUBLIC_WEBHOOK_SECRET || 'a5882b1fcfcd41a085b624fae1cd2948'}`;
   const aircallWebhookUrl = `https://prospectplus.com.au/api/aircall/webhook/${process.env.NEXT_PUBLIC_WEBHOOK_SECRET || 'a5882b1fcfcd41a085b624fae1cd2948'}`;
 
+  const dialpadUsers = users.filter(u => u.preferredTelephonyProvider === 'dialpad');
+  const aircallUsers = users.filter(u => u.preferredTelephonyProvider === 'aircall');
+  const defaultUsers = users.filter(u => !u.preferredTelephonyProvider || u.preferredTelephonyProvider === 'default');
+
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto py-4 px-2">
       {/* Header */}
@@ -167,10 +194,49 @@ export default function TelephonySettingsPage() {
             Control which telephony provider is active throughout ProspectPlus (Dialer, Webhooks, Reports & Transcripts).
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchSettings} disabled={loadingSettings} className="gap-2">
-          <RefreshCw className={`h-4 w-4 ${loadingSettings ? 'animate-spin' : ''}`} /> Refresh Status
+        <Button variant="outline" size="sm" onClick={refreshAll} disabled={loadingSettings || loadingUsers} className="gap-2">
+          <RefreshCw className={`h-4 w-4 ${loadingSettings || loadingUsers ? 'animate-spin' : ''}`} /> Refresh Status
         </Button>
       </header>
+
+      {/* Per-User Routing Status Banner / Card */}
+      <Card className="border border-purple-200 dark:border-purple-900/50 bg-gradient-to-r from-purple-50/50 via-background to-teal-50/30 dark:from-purple-950/20 dark:via-background dark:to-teal-950/20 shadow-sm">
+        <CardContent className="p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 font-semibold text-sm sm:text-base text-foreground">
+              <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <span>User Telephony Routing & Pilot Groups</span>
+              <Badge variant="outline" className="text-xs font-normal border-purple-300 dark:border-purple-800">
+                {users.length} Total Users
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+              You can pilot Dialpad with specific team members while keeping the rest of the company on AirCall. Individual user overrides take precedence over the global switch.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span>
+                <strong>{dialpadUsers.length}</strong> {dialpadUsers.length === 1 ? 'user' : 'users'} routed to Dialpad
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-900">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-600"></span>
+                <strong>{aircallUsers.length}</strong> {aircallUsers.length === 1 ? 'user' : 'users'} routed to AirCall
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-muted text-muted-foreground border">
+                <strong>{defaultUsers.length}</strong> {defaultUsers.length === 1 ? 'user' : 'users'} on Global Default ({activeProvider === 'dialpad' ? 'Dialpad' : 'AirCall'})
+              </span>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push('/admin/settings')}
+            className="shrink-0 gap-1.5 border-purple-300 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+          >
+            Configure Users <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Active System Switch Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -585,6 +585,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 aircallUserId: userData.aircallUserId || null,
                 dialpadPhoneNumber: userData.dialpadPhoneNumber || null,
                 dialpadUserId: userData.dialpadUserId || null,
+                preferredTelephonyProvider: userData.preferredTelephonyProvider || 'default',
                 disabled: false,
                 linkedSalesRep: userData.linkedSalesRep || null,
                 linkedBDR: userData.linkedBDR || null,
