@@ -100,11 +100,18 @@ export function CustomBulkSelectControl({
   }
 
   const helperAssignee = (lead: ScopeLeadItem) => {
-    const rep = isInbound ? lead.salesRepAssigned : (lead.dialerAssigned || lead.salesRepAssigned);
-    if (!rep || rep.trim() === '' || rep.trim().toLowerCase() === 'unassigned') {
+    const rawRep = isInbound ? lead.salesRepAssigned : lead.dialerAssigned;
+    if (
+      !rawRep ||
+      typeof rawRep !== 'string' ||
+      rawRep.trim() === '' ||
+      rawRep.trim().toLowerCase() === 'unassigned' ||
+      rawRep.trim().toLowerCase() === 'undefined' ||
+      rawRep.trim().toLowerCase() === 'null'
+    ) {
       return null;
     }
-    return rep.trim();
+    return rawRep.trim();
   };
 
   const hasScopeOptions = Boolean(scopeLeads && scopeLeads.length > 0);

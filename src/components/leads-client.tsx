@@ -1222,19 +1222,35 @@ export default function LeadsClientPage({
     const dialerCounts = new Map<string, number>();
     let unassigned = 0;
     leads.forEach(l => {
-      const rep = isInbound ? l.salesRepAssigned : (l.dialerAssigned || l.salesRepAssigned);
-      if (!rep || rep.trim() === '' || rep.trim().toLowerCase() === 'unassigned') {
+      const rawRep = isInbound ? l.salesRepAssigned : l.dialerAssigned;
+      const isUnassigned =
+        !rawRep ||
+        typeof rawRep !== 'string' ||
+        rawRep.trim() === '' ||
+        rawRep.trim().toLowerCase() === 'unassigned' ||
+        rawRep.trim().toLowerCase() === 'undefined' ||
+        rawRep.trim().toLowerCase() === 'null';
+
+      if (isUnassigned) {
         unassigned++;
       } else {
+        const rep = rawRep.trim();
         dialerCounts.set(rep, (dialerCounts.get(rep) || 0) + 1);
       }
     });
 
     const leadsMatchingDialer = leads.filter(l => {
-      const rep = isInbound ? l.salesRepAssigned : (l.dialerAssigned || l.salesRepAssigned);
-      const isUnassigned = !rep || rep.trim() === '' || rep.trim().toLowerCase() === 'unassigned';
+      const rawRep = isInbound ? l.salesRepAssigned : l.dialerAssigned;
+      const isUnassigned =
+        !rawRep ||
+        typeof rawRep !== 'string' ||
+        rawRep.trim() === '' ||
+        rawRep.trim().toLowerCase() === 'unassigned' ||
+        rawRep.trim().toLowerCase() === 'undefined' ||
+        rawRep.trim().toLowerCase() === 'null';
+
       if (reassignDialerFilter === 'unassigned') return isUnassigned;
-      if (reassignDialerFilter !== 'all') return rep === reassignDialerFilter;
+      if (reassignDialerFilter !== 'all') return !isUnassigned && rawRep.trim() === reassignDialerFilter;
       return true;
     });
 
