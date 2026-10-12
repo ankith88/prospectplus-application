@@ -16,33 +16,32 @@ import {
   Sparkles,
   Users,
   Shuffle,
-  CheckCircle2,
-  Building2,
+  Play,
   Loader2,
-  UserCheck,
-  Check,
   Layers,
+  ArrowRight,
+  ShieldCheck,
 } from 'lucide-react';
 import type { Lead, UserProfile } from '@/lib/types';
 
 interface EnrichmentDialerReviewDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  enrichedLeads: Lead[];
+  selectedLeads: Lead[];
   allDialers: UserProfile[];
-  onConfirmReassignment: (
-    assignments: Array<{ leadId: string; targetDialer: string }>
+  onConfirmAndStart: (
+    assignments: Array<{ leadId: string; targetDialer: string }> | null
   ) => Promise<void>;
-  onSkip: () => void;
+  onCancel: () => void;
 }
 
 export function EnrichmentDialerReviewDialog({
   isOpen,
   onOpenChange,
-  enrichedLeads,
+  selectedLeads,
   allDialers,
-  onConfirmReassignment,
-  onSkip,
+  onConfirmAndStart,
+  onCancel,
 }: EnrichmentDialerReviewDialogProps) {
   const [selectedDialerNames, setSelectedDialerNames] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,9 +87,9 @@ export function EnrichmentDialerReviewDialog({
 
   // Compute equal distribution preview counts
   const distributionPreview = useMemo(() => {
-    if (selectedDialerNames.length === 0 || enrichedLeads.length === 0) return [];
+    if (selectedDialerNames.length === 0 || selectedLeads.length === 0) return [];
 
-    const totalLeads = enrichedLeads.length;
+    const totalLeads = selectedLeads.length;
     const dialerCount = selectedDialerNames.length;
     const baseCount = Math.floor(totalLeads / dialerCount);
     const remainder = totalLeads % dialerCount;
@@ -99,15 +98,16 @@ export function EnrichmentDialerReviewDialog({
       name,
       count: baseCount + (idx < remainder ? 1 : 0),
     }));
-  }, [selectedDialerNames, enrichedLeads]);
+  }, [selectedDialerNames, selectedLeads]);
 
-  const handleAssign = async () => {
-    if (selectedDialerNames.length === 0 || enrichedLeads.length === 0) return;
+  // Handle Action 1: Assign to selected dialers and start enrichment
+  const handleAssignAndStart = async () => {
+    if (selectedDialerNames.length === 0 || selectedLeads.length === 0) return;
 
     setIsSubmitting(true);
     try {
-      // 1. Randomly shuffle enriched leads
-      const shuffledLeads = [...enrichedLeads].sort(() => Math.random() - 0.5);
+      // 1. Randomly shuffle leads
+      const shuffledLeads = [...selectedLeads].sort(() => Math.random() - 0.5);
 
       // 2. Randomly shuffle selected dialers
       const shuffledDialers = [...selectedDialerNames].sort(() => Math.random() - 0.5);
@@ -120,7 +120,17 @@ export function EnrichmentDialerReviewDialog({
         })
       );
 
-      await onConfirmReassignment(assignments);
+      await onConfirmAndStart(assignments);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle Action 2: Keep current assignees and start enrichment
+  const handleKeepCurrentAndStart = async () => {
+    setIsSubmitting(true);
+    try {
+      await onConfirmAndStart(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -138,16 +148,16 @@ export function EnrichmentDialerReviewDialog({
                   <Sparkles className="h-5 w-5 text-teal-300" />
                 </div>
                 <DialogTitle className="text-xl font-bold text-white tracking-tight">
-                  Enrichment Complete — Random & Equal Dialer Assignment
+                  Step 1: Assign Leads to Dialers & Begin AI Enrichment
                 </DialogTitle>
               </div>
               <Badge className="bg-emerald-500/20 text-emerald-200 border-emerald-400/30 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
-                <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-300" />
-                {enrichedLeads.length} Lead{enrichedLeads.length === 1 ? '' : 's'}
+                <Users className="h-3.5 w-3.5 mr-1 text-emerald-300" />
+                {selectedLeads.length} Lead{selectedLeads.length === 1 ? '' : 's'}
               </Badge>
             </div>
             <DialogDescription className="text-white/80 text-sm leading-relaxed">
-              AI enrichment has completed. Select one or more active Inside Dialers below to randomly and equally distribute the enriched leads across them.
+              Before AI enrichment begins, select one or more active Inside Dialers to randomly and equally allocate leads, or proceed with current assignees.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -242,11 +252,11 @@ export function EnrichmentDialerReviewDialog({
                 <div className="flex items-center gap-2">
                   <Shuffle className="h-4 w-4 text-[#095c7b] dark:text-teal-400" />
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Equal Allocation Breakdown
+                    Equal Allocation Preview
                   </span>
                 </div>
                 <Badge variant="outline" className="text-[11px] font-semibold bg-white dark:bg-slate-800">
-                  ~{Math.round(enrichedLeads.length / selectedDialerNames.length)} leads / dialer
+                  ~{Math.round(selectedLeads.length / selectedDialerNames.length)} leads / dialer
                 </Badge>
               </div>
 
@@ -267,12 +277,20 @@ export function EnrichmentDialerReviewDialog({
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 text-center text-xs text-amber-800 dark:text-amber-300">
-              Please select at least one dialer to distribute the enriched leads.
+            <div className="p-3.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 text-center text-xs text-amber-800 dark:text-amber-300">
+              Select at least one dialer to distribute equally, or choose <strong>Keep Current Assignees</strong> below.
             </div>
           )}
 
-          {/* Collapsible Enriched Leads Preview */}
+          {/* Autonomous Background Execution Notice */}
+          <div className="p-3 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-xl flex items-start gap-2.5">
+            <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-sky-800 dark:text-sky-300 leading-relaxed">
+              <strong>Safe Across Logouts:</strong> Once started, AI enrichment runs autonomously in the cloud. You can safely close your browser or log out — your progress will continue and remain intact.
+            </p>
+          </div>
+
+          {/* Collapsible Selected Leads Preview */}
           <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
             <button
               type="button"
@@ -281,7 +299,7 @@ export function EnrichmentDialerReviewDialog({
             >
               <div className="flex items-center gap-2">
                 <Layers className="h-3.5 w-3.5 text-slate-500" />
-                <span>View Enriched Leads ({enrichedLeads.length})</span>
+                <span>View Selected Leads ({selectedLeads.length})</span>
               </div>
               <span className="text-[11px] text-slate-500">
                 {showLeadsList ? 'Hide details ▲' : 'Show details ▼'}
@@ -290,15 +308,22 @@ export function EnrichmentDialerReviewDialog({
 
             {showLeadsList && (
               <div className="p-3 max-h-40 overflow-y-auto space-y-1.5 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
-                {enrichedLeads.map(l => (
+                {selectedLeads.map(l => (
                   <div key={l.id} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs">
-                    <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[300px]">
-                      {l.companyName}
-                    </span>
+                    <div className="truncate max-w-[320px]">
+                      <span className="font-medium text-slate-800 dark:text-slate-200">
+                        {l.companyName}
+                      </span>
+                      {l.dialerAssigned && (
+                        <span className="ml-2 text-[10px] text-slate-400">
+                          (Current: {l.dialerAssigned})
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-[11px]">
-                      <span>{l.address?.city || l.address?.state || 'Unknown Territory'}</span>
+                      <span>{l.address?.city || l.address?.state || 'Unknown'}</span>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {l.industryCategory || 'Enriched'}
+                        {l.industryCategory || 'Standard'}
                       </Badge>
                     </div>
                   </div>
@@ -309,36 +334,48 @@ export function EnrichmentDialerReviewDialog({
         </div>
 
         {/* Footer Actions */}
-        <DialogFooter className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between sm:justify-between">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            {selectedDialerNames.length} dialer{selectedDialerNames.length === 1 ? '' : 's'} selected
-          </div>
+        <DialogFooter className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between sm:justify-between flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="text-xs h-9 text-slate-500 hover:text-slate-800"
+          >
+            Cancel
+          </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <Button
               variant="outline"
               size="sm"
-              onClick={onSkip}
+              onClick={handleKeepCurrentAndStart}
               disabled={isSubmitting}
-              className="text-xs h-9"
+              className="text-xs h-9 font-medium border-slate-300 text-slate-700 hover:bg-slate-100"
             >
-              Skip Assignment
+              {isSubmitting ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="mr-1.5 h-3.5 w-3.5 text-slate-600 fill-slate-600" />
+              )}
+              Keep Current Assignees & Start
             </Button>
+
             <Button
               size="sm"
-              onClick={handleAssign}
+              onClick={handleAssignAndStart}
               disabled={isSubmitting || selectedDialerNames.length === 0}
               className="bg-[#095c7b] hover:bg-[#07475f] text-white text-xs h-9 font-semibold px-4 shadow-sm"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Assigning Leads...
+                  Assigning & Starting...
                 </>
               ) : (
                 <>
                   <Shuffle className="mr-2 h-4 w-4" />
-                  Randomly & Equally Assign ({enrichedLeads.length})
+                  Assign & Start AI Enrichment ({selectedLeads.length})
                 </>
               )}
             </Button>

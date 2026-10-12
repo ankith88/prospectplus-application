@@ -33,7 +33,7 @@ import { EnrichmentDialerReviewDialog } from '@/components/leads/enrichment-dial
 import { BatchEnrichmentDialog } from '@/components/leads/batch-enrichment-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck } from 'lucide-react'
+import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck, Zap, CheckCircle2 } from 'lucide-react'
 import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
 import { verifyEmailsClient } from '@/lib/verify-email-client'
 import { EmailVerificationResult } from '@/lib/types'
@@ -539,6 +539,9 @@ export default function LeadsClientPage({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBatchEnrichDialogOpen, setIsBatchEnrichDialogOpen] = useState(false);
   const [batchEnrichTargetIds, setBatchEnrichTargetIds] = useState<string[]>([]);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [backgroundJob, setBackgroundJob] = useState<any | null>(null);
+  const [isJobBannerDismissed, setIsJobBannerDismissed] = useState(false);
   const [allUsersState, setAllUsersState] = useState<UserProfile[]>([]);
   const [allFranchiseesState, setAllFranchiseesState] = useState<Franchisee[]>([]);
   const [isEnrichmentReviewOpen, setIsEnrichmentReviewOpen] = useState(false);
@@ -567,6 +570,40 @@ export default function LeadsClientPage({
 
   const [accountManagerMobile, setAccountManagerMobile] = useState<string>('');
   const [accountManagerCalendly, setAccountManagerCalendly] = useState<string>('');
+
+  // Poll for active background enrichment job across logouts & sessions
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkActiveJob = async () => {
+      try {
+        const res = await fetch('/api/admin/leads/batch-enrich/job?active=true');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted) {
+          if (data.success && data.job) {
+            setBackgroundJob(data.job);
+            if (!activeJobId && (data.job.status === 'running' || data.job.status === 'paused')) {
+              setActiveJobId(data.job.id);
+            }
+          } else {
+            setBackgroundJob(null);
+          }
+        }
+      } catch (e) {
+        // silent fail on network glitch
+      }
+    };
+
+    checkActiveJob();
+    const intervalTime = backgroundJob?.status === 'running' ? 3000 : 15000;
+    const interval = setInterval(checkActiveJob, intervalTime);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [backgroundJob?.status, activeJobId]);
   const getCallCount = useCallback((lead: Lead) => {
     if (Array.isArray(lead.activity) && lead.activity.length > 0) {
       const callActs = lead.activity.filter(a => a.type === 'Call');
@@ -1441,63 +1478,103 @@ export default function LeadsClientPage({
 
   const handleBatchEnrich = () => {
     if (selectedLeads.length === 0) return;
+    const targetLeads = allLeads.filter(l => selectedLeads.includes(l.id));
     setBatchEnrichTargetIds([...selectedLeads]);
-    setIsBatchEnrichDialogOpen(true);
+    setEnrichedLeadsToAssign(targetLeads);
+    // STEP 1: Ask user which dialer(s) to assign to BEFORE enrichment begins
+    setIsEnrichmentReviewOpen(true);
+  };
+
+  const handleConfirmAndStartEnrichment = async (
+    reassignments: Array<{ leadId: string; targetDialer: string }> | null
+  ) => {
+    setIsEnrichmentReviewOpen(false);
+
+    // 1. If user selected dialers to reassign, perform assignment first
+    if (reassignments && reassignments.length > 0) {
+      try {
+        const isInbound = filters.bucket === 'inbound';
+        const leadIds = reassignments.map(r => r.leadId);
+        const targetReps = reassignments.map(r => r.targetDialer);
+        await bulkUpdateLeadDialerRep(leadIds, targetReps, isInbound);
+
+        const reassignMap = new Map(reassignments.map(r => [r.leadId, r.targetDialer]));
+        setAllLeads(prev =>
+          prev.map(lead => {
+            if (reassignMap.has(lead.id)) {
+              const newDialer = reassignMap.get(lead.id)!;
+              return isInbound
+                ? { ...lead, salesRepAssigned: newDialer }
+                : { ...lead, dialerAssigned: newDialer };
+            }
+            return lead;
+          })
+        );
+
+        toast({
+          title: "Dialers Assigned",
+          description: `Equally distributed ${reassignments.length} lead(s) across selected dialers.`,
+        });
+      } catch (err: any) {
+        console.error("Failed to assign dialers:", err);
+        toast({
+          title: "Assignment Warning",
+          description: "Could not update dialer assignments, but starting enrichment...",
+          variant: "destructive",
+        });
+      }
+    }
+
+    // 2. Create and start cloud background job
+    try {
+      const leadNamesMap: Record<string, string> = {};
+      batchEnrichTargetIds.forEach(id => {
+        const found = allLeads.find(l => l.id === id);
+        if (found) {
+          leadNamesMap[id] = found.companyName || `Lead #${id.slice(0, 6)}`;
+        }
+      });
+
+      const response = await fetch('/api/admin/leads/batch-enrich/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          leadIds: batchEnrichTargetIds,
+          leadNames: leadNamesMap,
+          requestorUid: userProfile?.uid || user?.uid,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success && data.jobId) {
+        setActiveJobId(data.jobId);
+        setIsBatchEnrichDialogOpen(true);
+        setSelectedLeads([]);
+        setIsJobBannerDismissed(false);
+        toast({
+          title: "AI Enrichment Running in Cloud",
+          description: `Processing ${batchEnrichTargetIds.length} lead(s). Safe to close browser or log out anytime!`,
+        });
+      } else {
+        throw new Error(data.error || 'Failed to start cloud enrichment job');
+      }
+    } catch (error: any) {
+      console.error("Failed to launch batch enrichment job:", error);
+      toast({
+        title: "Enrichment Error",
+        description: error.message || "Failed to start enrichment job",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleBatchEnrichComplete = (enrichedLeadIds: string[]) => {
-    const targetLeads = allLeads.filter(l => enrichedLeadIds.includes(l.id));
-    setEnrichedLeadsToAssign(targetLeads);
-    if (targetLeads.length > 0) {
-      setIsEnrichmentReviewOpen(true);
-    }
-    setSelectedLeads([]);
     handleRefresh();
-  };
-
-  const handleConfirmEnrichmentReassignments = async (
-    reassignments: Array<{ leadId: string; targetDialer: string }>
-  ) => {
-    if (reassignments.length === 0) {
-      setIsEnrichmentReviewOpen(false);
-      return;
-    }
-
-    try {
-      const isInbound = filters.bucket === 'inbound';
-      await Promise.all(
-        reassignments.map(({ leadId, targetDialer }) =>
-          updateLeadDialerRep(leadId, targetDialer, isInbound)
-        )
-      );
-
-      const reassignMap = new Map(reassignments.map(r => [r.leadId, r.targetDialer]));
-      setAllLeads(prev =>
-        prev.map(lead => {
-          if (reassignMap.has(lead.id)) {
-            const newDialer = reassignMap.get(lead.id)!;
-            return isInbound
-              ? { ...lead, salesRepAssigned: newDialer }
-              : { ...lead, dialerAssigned: newDialer };
-          }
-          return lead;
-        })
-      );
-
-      toast({
-        title: "Dialer Assignment Complete",
-        description: `Successfully distributed ${reassignments.length} enriched lead(s) randomly & equally across selected dialers.`,
-      });
-      setIsEnrichmentReviewOpen(false);
-      handleRefresh();
-    } catch (err: any) {
-      console.error("Failed to confirm enrichment assignments:", err);
-      toast({
-        variant: "destructive",
-        title: "Assignment Failed",
-        description: err.message || "Failed to assign some leads.",
-      });
-    }
+    toast({
+      title: "Batch Enrichment Finished",
+      description: "Leads have been successfully enriched and updated.",
+    });
   };
   
   const handleBulkReassign = async () => {
@@ -2105,6 +2182,92 @@ export default function LeadsClientPage({
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
         <p className="text-muted-foreground">Manage and engage with your leads.</p>
       </header>
+
+      {/* CLOUD BATCH ENRICHMENT BANNER (RUNNING / PAUSED) */}
+      {backgroundJob && (backgroundJob.status === 'running' || backgroundJob.status === 'paused') && (
+        <div className="bg-gradient-to-r from-[#095c7b]/10 via-[#0b6d91]/15 to-[#04435b]/10 border border-[#095c7b]/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-[#095c7b] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Sparkles className="h-5 w-5 animate-pulse text-teal-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                  Cloud AI Batch Enrichment in Progress
+                </span>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[10px] font-bold uppercase tracking-wider',
+                    backgroundJob.status === 'running' && 'bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/60 animate-pulse',
+                    backgroundJob.status === 'paused' && 'bg-amber-50 text-amber-700 border-amber-300'
+                  )}
+                >
+                  {backgroundJob.status === 'running' ? 'Active in Cloud' : 'Paused'}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                Processed <strong>{backgroundJob.processedCount || 0}</strong> of <strong>{backgroundJob.totalLeads || 0}</strong> leads ({Math.min(100, Math.round(((backgroundJob.processedCount || 0) / (backgroundJob.totalLeads || 1)) * 100))}%) &bull; <strong>Safe across logouts:</strong> you can safely close your browser or navigate away
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <Button
+              size="sm"
+              onClick={() => {
+                setActiveJobId(backgroundJob.id);
+                setIsBatchEnrichDialogOpen(true);
+              }}
+              className="bg-[#095c7b] hover:bg-[#07475f] text-white text-xs font-semibold h-8 shadow-xs"
+            >
+              <Zap className="h-3.5 w-3.5 mr-1.5" />
+              View Live Progress & Controls
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* CLOUD BATCH ENRICHMENT BANNER (COMPLETED RECENTLY) */}
+      {backgroundJob && backgroundJob.status === 'completed' && !isJobBannerDismissed && (
+        <div className="bg-emerald-50/90 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <CheckCircle2 className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <span className="font-bold text-sm text-emerald-900 dark:text-emerald-100">
+                AI Batch Enrichment Completed
+              </span>
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                Processed <strong>{backgroundJob.totalLeads}</strong> leads ({backgroundJob.successCount} enriched, {backgroundJob.failureCount || 0} skipped).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setActiveJobId(backgroundJob.id);
+                setIsBatchEnrichDialogOpen(true);
+              }}
+              className="border-emerald-300 text-emerald-800 hover:bg-emerald-100/50 text-xs font-medium h-8"
+            >
+              View Summary
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsJobBannerDismissed(true)}
+              className="text-xs text-slate-500 hover:text-slate-700 h-8"
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
         <Collapsible id="step-leads-filters">
             <Card>
                 <CardHeader id="step-audience-filters" className="flex flex-row items-center justify-between">
@@ -3125,6 +3288,7 @@ export default function LeadsClientPage({
     <BatchEnrichmentDialog
       isOpen={isBatchEnrichDialogOpen}
       onOpenChange={setIsBatchEnrichDialogOpen}
+      jobId={activeJobId}
       leadIds={batchEnrichTargetIds}
       allLeads={allLeads}
       requestorUid={userProfile?.uid || user?.uid}
@@ -3133,10 +3297,10 @@ export default function LeadsClientPage({
     <EnrichmentDialerReviewDialog
       isOpen={isEnrichmentReviewOpen}
       onOpenChange={setIsEnrichmentReviewOpen}
-      enrichedLeads={enrichedLeadsToAssign}
+      selectedLeads={enrichedLeadsToAssign}
       allDialers={allDialers}
-      onConfirmReassignment={handleConfirmEnrichmentReassignments}
-      onSkip={() => setIsEnrichmentReviewOpen(false)}
+      onConfirmAndStart={handleConfirmAndStartEnrichment}
+      onCancel={() => setIsEnrichmentReviewOpen(false)}
     />
     </>
   )

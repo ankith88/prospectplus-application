@@ -27,6 +27,9 @@ import {
   ShoppingBag,
   ExternalLink,
   Users,
+  Cloud,
+  Check,
+  Minimize2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Lead } from '@/lib/types';
@@ -46,63 +49,56 @@ export interface EnrichedLeadResult {
 interface BatchEnrichmentDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  leadIds: string[];
+  jobId?: string | null;
+  leadIds?: string[];
   allLeads?: Lead[];
   requestorUid?: string;
   onComplete: (enrichedLeadIds: string[]) => void;
   autoStart?: boolean;
 }
 
-const CONCURRENCY = 6; // 6 parallel workers for 2.5x higher throughput and instant real-time streaming updates
+const CONCURRENCY = 6;
 
 export function BatchEnrichmentDialog({
   isOpen,
   onOpenChange,
-  leadIds,
+  jobId,
+  leadIds = [],
   allLeads = [],
   requestorUid,
   onComplete,
   autoStart = true,
 }: BatchEnrichmentDialogProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'completed' | 'stopped'>('idle');
+  const [totalLeadsCount, setTotalLeadsCount] = useState(leadIds.length);
+  const [processedCount, setProcessedCount] = useState(0);
   const [successCount, setSuccessCount] = useState(0);
   const [failureCount, setFailureCount] = useState(0);
   const [resultsLog, setResultsLog] = useState<EnrichedLeadResult[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [currentLeadName, setCurrentLeadName] = useState<string>('');
+  const [isActionPending, setIsActionPending] = useState(false);
 
-  const queueIndexRef = useRef(0);
-  const activeWorkersRef = useRef(0);
-  const inFlightMapRef = useRef<Map<string, string>>(new Map());
-  const isPausedRef = useRef(false);
-  const isStoppedRef = useRef(false);
-  const wasOpenRef = useRef(false);
   const logScrollRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Real clock timestamp anchors to prevent background tab timer drift
   const startTimeRef = useRef<number | null>(null);
   const pausedAtRef = useRef<number | null>(null);
   const totalPausedMsRef = useRef<number>(0);
-  // Rolling window of completion timestamps for ultra-accurate ETA calculation
   const completionTimestampsRef = useRef<number[]>([]);
 
-  const totalLeads = leadIds.length;
-  const processedCount = successCount + failureCount;
-  const progressPct = totalLeads > 0 ? Math.min(100, Math.round((processedCount / totalLeads) * 100)) : 0;
-  const leadMap = useMemo(() => new Map(allLeads.map((l) => [l.id, l])), [allLeads]);
+  // Local client execution refs (fallback if no server jobId)
+  const queueIndexRef = useRef(0);
+  const activeWorkersRef = useRef(0);
+  const inFlightMapRef = useRef<Map<string, string>>(new Map());
+  const isPausedRef = useRef(false);
+  const isStoppedRef = useRef(false);
 
-  // Update in-flight display label
-  const updateInFlightPreview = () => {
-    const names = Array.from(inFlightMapRef.current.values());
-    if (names.length === 0) {
-      setCurrentLeadName('');
-    } else if (names.length === 1) {
-      setCurrentLeadName(names[0]);
-    } else {
-      setCurrentLeadName(`${names[0]} (+${names.length - 1} more)`);
-    }
-  };
+  const leadMap = useMemo(() => new Map(allLeads.map((l) => [l.id, l])), [allLeads]);
+  const effectiveTotal = totalLeadsCount > 0 ? totalLeadsCount : leadIds.length;
+  const progressPct = effectiveTotal > 0 ? Math.min(100, Math.round((processedCount / effectiveTotal) * 100)) : 0;
 
   // Auto-scroll the live feed as new results stream in
   useEffect(() => {
@@ -111,7 +107,7 @@ export function BatchEnrichmentDialog({
     }
   }, [resultsLog, currentLeadName]);
 
-  // Elapsed time counter anchored to Date.now() to prevent browser tab throttling/drift
+  // Elapsed time counter anchored to Date.now()
   useEffect(() => {
     const updateRealElapsedTime = () => {
       if (startTimeRef.current && status === 'running') {
@@ -153,175 +149,92 @@ export function BatchEnrichmentDialog({
     };
   }, [status]);
 
-  // Prevent accidental tab closing while actively running
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (status === 'running') {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [status]);
+  // ==========================================
+  // SERVER BACKGROUND JOB MODE (jobId present)
+  // ==========================================
+  const pollServerJob = useCallback(async () => {
+    if (!jobId) return;
 
-  // Individual worker loop: processes 1 lead at a time and updates UI instantly upon completion
-  const runWorker = useCallback(async () => {
-    while (!isStoppedRef.current && !isPausedRef.current) {
-      if (queueIndexRef.current >= leadIds.length) {
-        break; // All leads have been assigned
-      }
+    try {
+      const res = await fetch(`/api/admin/leads/batch-enrich/job?jobId=${encodeURIComponent(jobId)}`);
+      if (!res.ok) return;
 
-      const currentIdx = queueIndexRef.current;
-      queueIndexRef.current += 1;
+      const data = await res.json();
+      if (!data.success || !data.job) return;
 
-      const leadId = leadIds[currentIdx];
-      const leadObj = leadMap.get(leadId);
-      const displayName = leadObj?.companyName || `Lead #${leadId}`;
+      const job = data.job;
+      if (job.totalLeads) setTotalLeadsCount(job.totalLeads);
+      if (typeof job.processedCount === 'number') setProcessedCount(job.processedCount);
+      if (typeof job.successCount === 'number') setSuccessCount(job.successCount);
+      if (typeof job.failureCount === 'number') setFailureCount(job.failureCount);
 
-      inFlightMapRef.current.set(leadId, displayName);
-      updateInFlightPreview();
-
-      try {
-        const response = await fetch('/api/admin/leads/batch-enrich', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            leadIds: [leadId],
-            requestorUid,
-          }),
-        });
-
-        const data = await response.json();
-        const resultItem = data?.results?.[0];
-
-        if (response.ok && data.success && resultItem) {
-          const item: EnrichedLeadResult = {
-            leadId,
-            success: Boolean(resultItem.success),
-            companyName: resultItem.companyName || displayName,
-            ecommercePlatform: resultItem.ecommercePlatform,
-            hasMultipleBranches: resultItem.hasMultipleBranches,
-            totalBranchCount: resultItem.totalBranchCount,
-            hasPoBox: resultItem.hasPoBox,
-            industryCategory: resultItem.industryCategory || leadObj?.industryCategory,
-            error: resultItem.error,
-          };
-
-          if (item.success) {
-            setSuccessCount((prev) => prev + 1);
-          } else {
-            setFailureCount((prev) => prev + 1);
-          }
-          setResultsLog((prev) => [...prev, item]);
-        } else {
-          setFailureCount((prev) => prev + 1);
-          setResultsLog((prev) => [
-            ...prev,
-            {
-              leadId,
-              success: false,
-              companyName: displayName,
-              error: data?.error || 'Enrichment failed',
-            },
-          ]);
+      if (Array.isArray(job.recentResults)) {
+        setResultsLog(job.recentResults);
+        if (job.recentResults.length > 0 && job.status === 'running') {
+          setCurrentLeadName(job.recentResults[0]?.companyName || '');
         }
-      } catch (err: any) {
-        setFailureCount((prev) => prev + 1);
-        setResultsLog((prev) => [
-          ...prev,
-          {
-            leadId,
-            success: false,
-            companyName: displayName,
-            error: err.message || 'Request failed',
-          },
-        ]);
-      } finally {
-        // Record timestamp for rolling window ETA (keep last 15)
+      }
+
+      if (job.status) {
+        setStatus(job.status);
+      }
+
+      // Record completion timestamp for rolling ETA calculation
+      if (job.processedCount > 0) {
         completionTimestampsRef.current.push(Date.now());
         if (completionTimestampsRef.current.length > 15) {
           completionTimestampsRef.current.shift();
         }
-
-        inFlightMapRef.current.delete(leadId);
-        updateInFlightPreview();
       }
+    } catch (err) {
+      console.error('Failed to poll background enrichment job:', err);
     }
+  }, [jobId]);
 
-    activeWorkersRef.current -= 1;
-
-    // Check if all active workers have finished
-    if (activeWorkersRef.current <= 0) {
-      activeWorkersRef.current = 0;
-      if (isStoppedRef.current) {
-        setStatus('stopped');
-        setCurrentLeadName('');
-      } else if (isPausedRef.current) {
-        setStatus('paused');
-      } else if (queueIndexRef.current >= leadIds.length) {
-        setStatus('completed');
-        setCurrentLeadName('');
-      }
-    }
-  }, [leadIds, leadMap, requestorUid]);
-
-  // Launch workers
-  const startProcessing = useCallback(() => {
-    isPausedRef.current = false;
-    isStoppedRef.current = false;
-    setStatus('running');
-
-    const remaining = leadIds.length - queueIndexRef.current;
-    if (remaining <= 0) {
-      setStatus('completed');
-      return;
-    }
-
-    const workersToSpawn = Math.min(CONCURRENCY, remaining);
-    activeWorkersRef.current = workersToSpawn;
-
-    for (let i = 0; i < workersToSpawn; i++) {
-      runWorker();
-    }
-  }, [leadIds.length, runWorker]);
-
-  // Reset & start when dialog opens
   useEffect(() => {
-    if (isOpen && !wasOpenRef.current) {
-      wasOpenRef.current = true;
-      queueIndexRef.current = 0;
-      activeWorkersRef.current = 0;
-      inFlightMapRef.current.clear();
-      setSuccessCount(0);
-      setFailureCount(0);
-      setResultsLog([]);
-      setElapsedSeconds(0);
-      setCurrentLeadName('');
-      isPausedRef.current = false;
-      isStoppedRef.current = false;
+    if (!isOpen || !jobId) return;
 
-      // Reset timestamp anchors
-      startTimeRef.current = null;
-      pausedAtRef.current = null;
-      totalPausedMsRef.current = 0;
-      completionTimestampsRef.current = [];
+    // Immediately poll once
+    pollServerJob();
 
-      if (autoStart && leadIds.length > 0) {
-        setStatus('running');
-        const startTimer = setTimeout(() => {
-          startProcessing();
-        }, 150);
-        return () => clearTimeout(startTimer);
-      } else {
-        setStatus('idle');
+    // Poll every 1.5 seconds while open
+    pollIntervalRef.current = setInterval(pollServerJob, 1500);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
-    } else if (!isOpen) {
-      wasOpenRef.current = false;
-      isStoppedRef.current = true;
-      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isOpen, jobId, pollServerJob]);
+
+  // Server Job Control Actions
+  const handleServerAction = async (action: 'pause' | 'resume' | 'stop') => {
+    if (!jobId) return;
+    setIsActionPending(true);
+    try {
+      const res = await fetch('/api/admin/leads/batch-enrich/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          jobId,
+          requestorUid,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (action === 'pause') setStatus('paused');
+        if (action === 'resume') setStatus('running');
+        if (action === 'stop') setStatus('stopped');
+      }
+    } catch (err) {
+      console.error(`Failed to ${action} job:`, err);
+    } finally {
+      setIsActionPending(false);
+      pollServerJob();
     }
-  }, [isOpen, autoStart, leadIds.length, startProcessing]);
+  };
 
   // Format seconds to mm:ss or hh:mm:ss
   const formatTime = (secs: number) => {
@@ -334,14 +247,13 @@ export function BatchEnrichmentDialog({
     return `${m}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
-  // Estimate Remaining Time (ETA) - rolling window based on last 15 completed leads
+  // Estimate Remaining Time (ETA)
   const calculateEta = () => {
     if (processedCount === 0 || elapsedSeconds < 2) return 'Calculating...';
-    const remainingLeads = totalLeads - processedCount;
+    const remainingLeads = effectiveTotal - processedCount;
     if (remainingLeads <= 0) return '0s';
 
     const timestamps = completionTimestampsRef.current;
-    // If we have at least 3 recent completions, calculate rolling pace from the last 15
     if (timestamps.length >= 3) {
       const oldest = timestamps[0];
       const newest = timestamps[timestamps.length - 1];
@@ -354,35 +266,9 @@ export function BatchEnrichmentDialog({
       }
     }
 
-    // Fallback to cumulative wall-clock average
     const wallClockSecsPerLead = elapsedSeconds / processedCount;
     const estRemainingSeconds = Math.max(0, Math.round(wallClockSecsPerLead * remainingLeads));
     return formatTime(estRemainingSeconds);
-  };
-
-  const handleStart = () => {
-    startProcessing();
-  };
-
-  const handlePause = () => {
-    isPausedRef.current = true;
-    if (!pausedAtRef.current) {
-      pausedAtRef.current = Date.now();
-    }
-    if (activeWorkersRef.current <= 0) {
-      setStatus('paused');
-    }
-  };
-
-  const handleResume = () => {
-    startProcessing();
-  };
-
-  const handleStop = () => {
-    isStoppedRef.current = true;
-    isPausedRef.current = false;
-    setStatus('stopped');
-    setCurrentLeadName('');
   };
 
   const handleFinish = () => {
@@ -392,25 +278,13 @@ export function BatchEnrichmentDialog({
   };
 
   const handleClose = () => {
-    if (status === 'running') {
-      if (confirm('Batch enrichment is currently running. Are you sure you want to stop?')) {
-        handleStop();
-        onOpenChange(false);
-      }
-    } else {
-      onOpenChange(false);
-    }
+    // Closing the modal does not kill the server background job!
+    onOpenChange(false);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent 
-        onInteractOutside={(e) => {
-          if (status === 'running') e.preventDefault();
-        }}
-        onEscapeKeyDown={(e) => {
-          if (status === 'running') e.preventDefault();
-        }}
         className="max-w-2xl sm:max-w-3xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl flex flex-col max-h-[90vh]"
       >
         <DialogHeader className="space-y-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
@@ -433,11 +307,11 @@ export function BatchEnrichmentDialog({
                       status === 'idle' && 'bg-slate-100 text-slate-600'
                     )}
                   >
-                    {status === 'running' && 'Analyzing in Progress'}
+                    {status === 'running' && 'Analyzing in Cloud'}
                     {status === 'paused' && 'Paused'}
                     {status === 'completed' && 'Completed'}
                     {status === 'stopped' && 'Stopped'}
-                    {status === 'idle' && 'Ready'}
+                    {status === 'idle' && 'Starting'}
                   </Badge>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
@@ -445,12 +319,11 @@ export function BatchEnrichmentDialog({
                 </DialogDescription>
               </div>
             </div>
-            {status === 'running' && (
-              <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 text-[11px] hidden sm:flex items-center gap-1 font-medium">
-                <Clock className="w-3 h-3 text-amber-600" />
-                Keep tab open
-              </Badge>
-            )}
+            
+            <Badge variant="outline" className="bg-sky-50 text-sky-800 border-sky-200 text-[11px] hidden sm:flex items-center gap-1 font-medium">
+              <Cloud className="w-3 h-3 text-sky-600" />
+              Cloud Autonomous &bull; Safe to Walk Away
+            </Badge>
           </div>
         </DialogHeader>
 
@@ -460,7 +333,7 @@ export function BatchEnrichmentDialog({
             <div className="flex items-center justify-between text-xs font-semibold">
               <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 {status === 'running' && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#095c7b]" />}
-                <span>Progress: {processedCount.toLocaleString()} / {totalLeads.toLocaleString()} Leads</span>
+                <span>Progress: {processedCount.toLocaleString()} / {effectiveTotal.toLocaleString()} Leads</span>
               </span>
               <span className="text-[#095c7b] dark:text-[#38bdf8] font-bold text-sm">
                 {progressPct}%
@@ -481,7 +354,7 @@ export function BatchEnrichmentDialog({
             <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
               <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Completed</p>
               <p className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-0.5">
-                {processedCount} <span className="text-xs font-normal text-slate-400">/ {totalLeads}</span>
+                {processedCount} <span className="text-xs font-normal text-slate-400">/ {effectiveTotal}</span>
               </p>
             </div>
 
@@ -527,7 +400,7 @@ export function BatchEnrichmentDialog({
                   {status === 'running' ? (
                     <>
                       <Loader2 className="w-6 h-6 mb-2 text-[#095c7b] animate-spin" />
-                      <p className="font-semibold text-slate-700 dark:text-slate-200">Analyzing first batch of leads...</p>
+                      <p className="font-semibold text-slate-700 dark:text-slate-200">Analyzing leads in the background...</p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
                         Probing websites, eCommerce platforms, and Australian multi-branches.
                       </p>
@@ -535,9 +408,9 @@ export function BatchEnrichmentDialog({
                   ) : (
                     <>
                       <Sparkles className="w-6 h-6 mb-1.5 text-slate-300 dark:text-slate-600" />
-                      <p className="font-medium text-slate-600 dark:text-slate-300">Ready to enrich {totalLeads} selected leads.</p>
+                      <p className="font-medium text-slate-600 dark:text-slate-300">Enriching {effectiveTotal} selected leads.</p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Click &quot;Start Batch Enrichment&quot; below to begin.
+                        Processing autonomously in the cloud.
                       </p>
                     </>
                   )}
@@ -550,50 +423,59 @@ export function BatchEnrichmentDialog({
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       {item.success ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                       ) : (
                         <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                       )}
                       <div className="min-w-0">
-                        <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                          {item.companyName}
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[280px]">
+                          {item.companyName || `Lead #${item.leadId.slice(0, 6)}`}
                         </p>
-                        {item.error ? (
-                          <p className="text-[10px] text-rose-500 truncate">{item.error}</p>
+                        {item.success ? (
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 flex-wrap">
+                            {item.ecommercePlatform && item.ecommercePlatform !== 'No' && (
+                              <span className="inline-flex items-center gap-0.5 text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1 rounded font-medium">
+                                <ShoppingBag className="w-2.5 h-2.5" />
+                                {item.ecommercePlatform}
+                              </span>
+                            )}
+                            {item.hasMultipleBranches && (
+                              <span className="inline-flex items-center gap-0.5 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-1 rounded font-medium">
+                                <Building2 className="w-2.5 h-2.5" />
+                                {item.totalBranchCount ? `${item.totalBranchCount} Branches` : 'Multi-Branch'}
+                              </span>
+                            )}
+                            {item.hasPoBox && (
+                              <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1 rounded font-medium">
+                                <Mail className="w-2.5 h-2.5" />
+                                PO Box
+                              </span>
+                            )}
+                            {item.industryCategory && (
+                              <span className="text-slate-400">
+                                &bull; {item.industryCategory}
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          <p className="text-[10px] text-slate-400 truncate">
-                            {item.industryCategory || 'Enriched'}
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[280px]">
+                            {item.error || 'Skipped'}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                      {item.ecommercePlatform && item.ecommercePlatform !== 'No' && item.ecommercePlatform !== 'Not Detected' && (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px] px-1.5 py-0">
-                          <ShoppingBag className="w-2.5 h-2.5 mr-1" />
-                          {item.ecommercePlatform}
-                        </Badge>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-[10px] px-1.5 py-0 shrink-0 font-medium',
+                        item.success
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
                       )}
-
-                      {item.hasMultipleBranches && (
-                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-300 text-[10px] px-1.5 py-0">
-                          <Building2 className="w-2.5 h-2.5 mr-1" />
-                          {item.totalBranchCount || 2}+ Sites
-                        </Badge>
-                      )}
-
-                      {item.hasPoBox && (
-                        <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 text-[10px] px-1.5 py-0">
-                          <Mail className="w-2.5 h-2.5 mr-1" />
-                          PO Box
-                        </Badge>
-                      )}
-
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        #{item.leadId}
-                      </span>
-                    </div>
+                    >
+                      {item.success ? 'Enriched' : 'Skipped'}
+                    </Badge>
                   </div>
                 ))
               )}
@@ -603,24 +485,15 @@ export function BatchEnrichmentDialog({
 
         <DialogFooter className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between sm:justify-between w-full flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            {status === 'idle' && (
-              <Button
-                type="button"
-                onClick={handleStart}
-                className="bg-[#095c7b] hover:bg-[#074b64] text-white font-semibold flex items-center gap-1.5 shadow-sm"
-              >
-                <Play className="w-4 h-4 fill-white" />
-                Start Batch Enrichment ({totalLeads})
-              </Button>
-            )}
-
             {status === 'running' && (
               <>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handlePause}
-                  className="border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold flex items-center gap-1.5"
+                  size="sm"
+                  disabled={isActionPending}
+                  onClick={() => handleServerAction('pause')}
+                  className="border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold flex items-center gap-1.5 text-xs h-9"
                 >
                   <Pause className="w-3.5 h-3.5" />
                   Pause
@@ -629,8 +502,9 @@ export function BatchEnrichmentDialog({
                   type="button"
                   variant="destructive"
                   size="sm"
-                  onClick={handleStop}
-                  className="font-semibold flex items-center gap-1.5"
+                  disabled={isActionPending}
+                  onClick={() => handleServerAction('stop')}
+                  className="font-semibold flex items-center gap-1.5 text-xs h-9"
                 >
                   <Square className="w-3.5 h-3.5" />
                   Stop & Keep ({successCount})
@@ -642,8 +516,10 @@ export function BatchEnrichmentDialog({
               <>
                 <Button
                   type="button"
-                  onClick={handleResume}
-                  className="bg-[#095c7b] hover:bg-[#074b64] text-white font-semibold flex items-center gap-1.5 shadow-sm"
+                  size="sm"
+                  disabled={isActionPending}
+                  onClick={() => handleServerAction('resume')}
+                  className="bg-[#095c7b] hover:bg-[#074b64] text-white font-semibold flex items-center gap-1.5 shadow-sm text-xs h-9"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
                   Resume Enrichment
@@ -651,8 +527,10 @@ export function BatchEnrichmentDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleStop}
-                  className="text-slate-600 font-semibold flex items-center gap-1.5"
+                  size="sm"
+                  disabled={isActionPending}
+                  onClick={() => handleServerAction('stop')}
+                  className="text-slate-600 font-semibold flex items-center gap-1.5 text-xs h-9"
                 >
                   <Square className="w-3.5 h-3.5" />
                   Finish Processed ({successCount})
@@ -662,25 +540,42 @@ export function BatchEnrichmentDialog({
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            {(status === 'completed' || status === 'stopped') && (
+            {status === 'running' && (
               <Button
                 type="button"
-                onClick={handleFinish}
-                className="bg-[#095c7b] hover:bg-[#074b64] text-white font-semibold flex items-center gap-1.5 shadow-sm"
+                variant="outline"
+                size="sm"
+                onClick={handleClose}
+                className="text-xs h-9 border-sky-300 text-sky-800 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:border-sky-800 dark:text-sky-300 font-semibold flex items-center gap-1.5"
               >
-                <Users className="w-4 h-4" />
-                Proceed to Distribute Leads ({successCount})
+                <Minimize2 className="w-3.5 h-3.5" />
+                Run in Background (Safe to Walk Away)
               </Button>
             )}
 
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleClose}
-              className="text-slate-500 hover:text-slate-800 text-xs"
-            >
-              {status === 'completed' || status === 'stopped' ? 'Done' : 'Cancel'}
-            </Button>
+            {(status === 'completed' || status === 'stopped') && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleFinish}
+                className="bg-[#095c7b] hover:bg-[#074b64] text-white font-semibold flex items-center gap-1.5 shadow-sm text-xs h-9"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Done & Refresh Leads ({successCount} Enriched)
+              </Button>
+            )}
+
+            {status !== 'running' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleClose}
+                className="text-slate-500 hover:text-slate-800 text-xs h-9"
+              >
+                Close
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

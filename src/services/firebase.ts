@@ -2565,18 +2565,24 @@ async function markAllNotificationsAsRead(userId: string): Promise<void> {
 }
 
 async function bulkUpdateLeadDialerRep(leadIds: string[], newDialerReps: (string | null)[], isInbound: boolean = false): Promise<void> {
-    const batch = writeBatch(firestore);
     const updateField = isInbound ? 'salesRepAssigned' : 'dialerAssigned';
     const now = new Date().toISOString();
-    leadIds.forEach((id, i) => {
-        const rep = newDialerReps[i % newDialerReps.length];
-        const updateData: any = { [updateField]: rep === null ? deleteField() : rep };
-        if (!isInbound && rep !== null) {
-            updateData.assignedToDialerAt = now;
-        }
-        batch.update(doc(firestore, 'leads', id), updateData);
-    });
-    await batch.commit();
+    const CHUNK_SIZE = 400; // Firestore allows max 500 writes per batch
+
+    for (let i = 0; i < leadIds.length; i += CHUNK_SIZE) {
+        const chunk = leadIds.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(firestore);
+        chunk.forEach((id, chunkIdx) => {
+            const globalIdx = i + chunkIdx;
+            const rep = newDialerReps[globalIdx % newDialerReps.length];
+            const updateData: any = { [updateField]: rep === null ? deleteField() : rep };
+            if (!isInbound && rep !== null) {
+                updateData.assignedToDialerAt = now;
+            }
+            batch.update(doc(firestore, 'leads', id), updateData);
+        });
+        await batch.commit();
+    }
 }
 
 async function addLeadsToMarketingList(leadIds: string[], listName: string, author: string, noteText: string, keepBucket: boolean = false): Promise<void> {
