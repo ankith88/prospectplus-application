@@ -167,8 +167,13 @@ async function sendJobCompletionNotifications(jobId: string, db: FirebaseFiresto
 </body>
 </html>`;
 
+      const CC_EMAIL = 'ankith.ravindran@mailplus.com.au';
+      const recipientTo = userEmail || CC_EMAIL;
+      const ccRecipient = recipientTo.toLowerCase().trim() !== CC_EMAIL.toLowerCase() ? CC_EMAIL : undefined;
+
       await sendPhysicalEmail({
-        to: userEmail,
+        to: recipientTo,
+        cc: ccRecipient,
         subject: `✅ AI Lead Batch Enrichment Complete: ${successCount.toLocaleString()}/${totalLeads.toLocaleString()} Leads Enriched`,
         html,
         trackingCategory: 'system',
@@ -191,6 +196,27 @@ async function startJobWorker(jobId: string) {
 
   const db = getFirestore(adminApp);
   const jobRef = db.collection('enrichment_jobs').doc(jobId);
+
+  // Pre-fetch requestor info so that each enriched lead gets an activity logged with the person's name
+  let requestorName = 'AI Lead Intelligence Agent';
+  let requestorEmail = '';
+  let requestorUid = '';
+  try {
+    const initialSnap = await jobRef.get();
+    if (initialSnap.exists) {
+      requestorUid = initialSnap.data()?.requestorUid || '';
+      if (requestorUid) {
+        const uDoc = await db.collection('users').doc(requestorUid).get();
+        if (uDoc.exists) {
+          const u = uDoc.data() || {};
+          requestorName = u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || 'Team Member';
+          requestorEmail = u.email || u.workEmail || '';
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not pre-fetch requestor info:', err);
+  }
 
   try {
     while (true) {
@@ -227,7 +253,7 @@ async function startJobWorker(jobId: string) {
       const batchPromises = batchLeadIds.map(async (id: string) => {
         const fallbackName = leadNames[id] || `Lead #${id.slice(0, 6)}`;
         try {
-          const res = await enrichLeadAction(id);
+          const res = await enrichLeadAction(id, { requestorName, requestorEmail, requestorUid });
           if (res.success) {
             return {
               leadId: id,

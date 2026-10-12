@@ -579,7 +579,14 @@ export const enrichLeadFlow = ai.defineFlow(
 /**
  * Server Action to enrich a lead by lead ID and save all results to Firestore.
  */
-export async function enrichLeadAction(leadId: string) {
+export async function enrichLeadAction(
+  leadId: string,
+  options?: {
+    requestorName?: string;
+    requestorEmail?: string;
+    requestorUid?: string;
+  }
+) {
   try {
     const db = getFirestore(adminApp);
     const leadRef = db.collection('leads').doc(leadId);
@@ -678,14 +685,36 @@ export async function enrichLeadAction(leadId: string) {
       fulfilmentModel: enrichment.fulfilmentModel || '',
       isAiEnriched: true,
       enrichedAt: new Date().toISOString(),
-      enrichedBy: 'AI Lead Intelligence Agent',
+      enrichedBy: options?.requestorName || 'AI Lead Intelligence Agent',
     };
 
     if (enrichment.hasParcelShipping !== undefined) {
       updatePayload.hasParcelShipping = enrichment.hasParcelShipping;
     }
 
+    const nowIso = new Date().toISOString();
+    updatePayload.lastActivityDate = nowIso;
+    updatePayload.updatedAt = nowIso;
+
     await leadRef.update(updatePayload);
+
+    // Create an Activity record under leads/{leadId}/activity so anyone viewing the lead knows when and who enriched it
+    try {
+      const enrichedByName = options?.requestorName || 'AI Lead Intelligence Agent';
+      const activityData: Record<string, any> = {
+        type: 'AI Enrichment',
+        notes: `Lead was enriched with AI intelligence by ${enrichedByName}. eCommerce platform, shipping analysis, and branch locations updated.`,
+        author: enrichedByName,
+        date: nowIso,
+        syncedWithNetSuite: false,
+      };
+      if (options?.requestorEmail) {
+        activityData.email = options.requestorEmail;
+      }
+      await leadRef.collection('activity').add(activityData);
+    } catch (actErr) {
+      console.warn(`Could not add enrichment activity for lead ${leadId}:`, actErr);
+    }
 
     return {
       success: true,

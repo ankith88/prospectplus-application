@@ -5,18 +5,29 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const rawParams = context?.params;
-    const resolvedParams = rawParams instanceof Promise ? await rawParams : rawParams;
+    const resolvedParams = await context.params;
     const leadId = resolvedParams?.id;
 
     if (!leadId) {
       return NextResponse.json({ error: 'Lead ID is required' }, { status: 400 });
     }
 
-    const result = await enrichLeadAction(leadId);
+    let requestorOptions: any = undefined;
+    try {
+      const body = await req.json();
+      if (body) {
+        requestorOptions = {
+          requestorName: body.requestorName,
+          requestorEmail: body.requestorEmail,
+          requestorUid: body.requestorUid,
+        };
+      }
+    } catch {}
+
+    const result = await enrichLeadAction(leadId, requestorOptions);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 500 });
