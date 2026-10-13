@@ -2187,7 +2187,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                                     ) : (
                                                         <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
                                                     )}
-                                                    Grant Access
+                                                    Grant ShipMate Access
                                                 </Button>
                                             )}
                                             <Button

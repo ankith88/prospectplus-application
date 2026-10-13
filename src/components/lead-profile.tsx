@@ -8725,46 +8725,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             <span className="text-muted-foreground">-</span>
                                         )}
                                         {contact.email && (
-                                            <>
-                                                <EmailVerificationBadge
-                                                    status={contact.verificationStatus}
-                                                    score={contact.verificationScore}
-                                                    verifiedAt={contact.verifiedAt}
-                                                    onVerify={() => handleVerifySingleEmail(contact)}
-                                                    loading={!!verifyingEmails[contact.email?.toLowerCase().trim()]}
-                                                    size="sm"
-                                                />
-                                                {contact.shipmateStatus !== 'Activated' && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-6 text-[11px] px-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50 flex items-center gap-1 ml-1"
-                                                        disabled={grantingShipmateId === contact.id || checkingShipmateId === contact.id}
-                                                        onClick={() => handleGrantShipmateAccess(contact)}
-                                                    >
-                                                        {grantingShipmateId === contact.id ? (
-                                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                                        ) : (
-                                                            <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                                                        )}
-                                                        Grant Access
-                                                    </Button>
-                                                )}
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-6 text-[11px] px-2 text-blue-600 border-blue-200 hover:bg-blue-50 flex items-center gap-1 ml-1"
-                                                    disabled={checkingShipmateId === contact.id || grantingShipmateId === contact.id}
-                                                    onClick={() => handleCheckShipmateStatus(contact)}
-                                                >
-                                                    {checkingShipmateId === contact.id ? (
-                                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                                    ) : (
-                                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
-                                                    )}
-                                                    Check ShipMate
-                                                </Button>
-                                            </>
+                                            <EmailVerificationBadge
+                                                status={contact.verificationStatus}
+                                                score={contact.verificationScore}
+                                                verifiedAt={contact.verifiedAt}
+                                                onVerify={() => handleVerifySingleEmail(contact)}
+                                                loading={!!verifyingEmails[contact.email?.toLowerCase().trim()]}
+                                                size="sm"
+                                            />
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -8838,6 +8806,75 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                             )}
                                         </div>
                                     )}
+
+                                    {contact.email && (
+                                        <div className="mt-2.5 pt-2 border-t border-muted/50 flex flex-wrap items-center gap-2">
+                                            <span className="text-[11px] font-semibold text-muted-foreground shrink-0 flex items-center gap-1">
+                                                <Key className="w-3 h-3 text-muted-foreground" />
+                                                Portal Access:
+                                            </span>
+                                            
+                                            {/* ShipMate Actions */}
+                                            {contact.shipmateStatus !== 'Activated' ? (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-6 text-[11px] px-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950 flex items-center gap-1 font-medium shadow-2xs"
+                                                    disabled={grantingShipmateId === contact.id || checkingShipmateId === contact.id}
+                                                    onClick={() => handleGrantShipmateAccess(contact)}
+                                                    title="Grant ShipMate Access"
+                                                >
+                                                    {grantingShipmateId === contact.id ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    ) : (
+                                                        <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                                    )}
+                                                    Grant ShipMate Access
+                                                </Button>
+                                            ) : (
+                                                <Badge variant="outline" className="h-6 text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 px-2 py-0 flex items-center gap-1 font-semibold">
+                                                    <UserCheck className="w-3 h-3 text-emerald-600" /> ShipMate Active
+                                                </Badge>
+                                            )}
+
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-6 text-[11px] px-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950 flex items-center gap-1 font-medium shadow-2xs"
+                                                disabled={checkingShipmateId === contact.id || grantingShipmateId === contact.id}
+                                                onClick={() => handleCheckShipmateStatus(contact)}
+                                                title="Check ShipMate Status"
+                                            >
+                                                {checkingShipmateId === contact.id ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                                                )}
+                                                Check ShipMate
+                                            </Button>
+
+                                            {/* LocalMile Action */}
+                                            {(!contact.localMilePlusAuthLink || !contact.securityCode) && !isCancelledInLocalMile ? (
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-6 text-[11px] px-2 text-sky-700 border-sky-300 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950 flex items-center gap-1 font-medium shadow-2xs" 
+                                                    onClick={() => {
+                                                        setPreselectedLocalMileContactId(contact.id);
+                                                        setIsLocalMileDialogOpen(true);
+                                                    }}
+                                                    title="Grant LocalMile Access"
+                                                >
+                                                    <Star className="h-3.5 w-3.5 text-sky-600" />
+                                                    Grant LocalMile Access
+                                                </Button>
+                                            ) : (contact.localMilePlusAuthLink && contact.securityCode) ? (
+                                                <Badge variant="outline" className="h-6 text-[10px] bg-sky-50 text-sky-700 border-sky-300 px-2 py-0 flex items-center gap-1 font-semibold">
+                                                    <Star className="w-3 h-3 text-sky-600" /> LocalMile Granted
+                                                </Badge>
+                                            ) : null}
+                                        </div>
+                                    )}
                                     
                                     {contact.localMilePlusAuthLink && contact.securityCode && (
                                         <div className="mt-3 pt-2 border-t border-muted-foreground/20 space-y-1 text-xs">
@@ -8874,23 +8911,6 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                                     </Button>
                                                 )}
                                             </div>
-                                        </div>
-                                    )}
-
-                                    {(!contact.localMilePlusAuthLink || !contact.securityCode) && contact.email && !isCancelledInLocalMile && (
-                                        <div className="mt-2 pt-2 border-t border-muted-foreground/10">
-                                            <Button 
-                                                variant="outline" 
-                                                size="sm" 
-                                                className="w-full text-xs text-sky-700 border-sky-200 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950 flex items-center justify-center gap-1.5" 
-                                                onClick={() => {
-                                                    setPreselectedLocalMileContactId(contact.id);
-                                                    setIsLocalMileDialogOpen(true);
-                                                }}
-                                            >
-                                                <Star className="w-3.5 h-3.5 text-sky-600" />
-                                                Grant LocalMile Access
-                                            </Button>
                                         </div>
                                     )}
                                 </div>
