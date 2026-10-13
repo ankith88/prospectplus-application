@@ -42,9 +42,24 @@ export function resolveRepFromNumber(numName: string, assignedUsers?: Array<{ na
   return numName || 'Team Line';
 }
 
-function getAircallAuthHeaders(): { Authorization: string } | null {
-  const apiId = (process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '').trim().replace(/^["']|["']$/g, '');
-  const apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+async function getAircallAuthHeaders(): Promise<{ Authorization: string } | null> {
+  let apiId = (process.env.AIRCALL_API_ID || process.env.AIRCALL_API_KEY || process.env.NEXT_PUBLIC_AIRCALL_API_ID || '').trim().replace(/^["']|["']$/g, '');
+  let apiToken = (process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+
+  if (!apiId || !apiToken) {
+    try {
+      const snap = await admin.firestore().doc('system_settings/telephony').get();
+      if (snap.exists) {
+        const data = snap.data();
+        if (data?.aircall?.apiId && data?.aircall?.apiToken) {
+          apiId = String(data.aircall.apiId).trim();
+          apiToken = String(data.aircall.apiToken).trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   if (!apiId || !apiToken) {
     return null;
@@ -108,7 +123,7 @@ function getSydneyDayRange(dateString: string): { startEpoch: number; endEpoch: 
 }
 
 async function fetchAircallInboundData(fromSeconds: number, toSeconds: number) {
-  const headers = getAircallAuthHeaders();
+  const headers = await getAircallAuthHeaders();
   if (!headers) {
     functions.logger.warn('Aircall API credentials not configured.');
     return null;
@@ -257,6 +272,116 @@ async function fetchAircallInboundData(fromSeconds: number, toSeconds: number) {
   }
 }
 
+function buildInboundReportFromFirestore(
+  rawCalls: any[],
+  unassignedCalls: any[],
+  fromSeconds: number
+) {
+  const isCallInbound = (c: any) => {
+    if (c.direction === 'inbound') return true;
+    if (typeof c.notes === 'string') {
+      const l = c.notes.toLowerCase();
+      if (l.includes('inbound call') || l.includes('missed inbound')) return true;
+    }
+    return false;
+  };
+
+  const activityInbound = rawCalls.filter(isCallInbound);
+  const unassignedInbound = unassignedCalls.filter(isCallInbound);
+
+  const callMap = new Map<string, any>();
+  for (const c of [...activityInbound, ...unassignedInbound]) {
+    const key = c.callId ? String(c.callId) : c.id;
+    if (!callMap.has(key)) {
+      callMap.set(key, c);
+    }
+  }
+
+  const allInboundCalls = Array.from(callMap.values());
+  if (allInboundCalls.length === 0) {
+    return null;
+  }
+
+  let totalAnswered = 0;
+  let totalMissed = 0;
+  let inHoursMissed = 0;
+  let outOfHoursMissed = 0;
+
+  const numbersBreakdownMap = new Map<string, any>();
+  const enrichedCalls: any[] = [];
+
+  for (const c of allInboundCalls) {
+    const isMissed =
+      c.aircallStatus === 'missed' ||
+      c.status === 'missed' ||
+      !!c.missedCallReason ||
+      (typeof c.notes === 'string' && c.notes.toLowerCase().includes('missed'));
+    const isAnswered = !isMissed;
+    const callTimeMs = c.date ? new Date(c.date).getTime() : fromSeconds * 1000;
+    const epochSec = Math.floor(callTimeMs / 1000);
+    const outOfHours =
+      c.missedCallReason === 'out_of_opening_hours' || isOutOfBusinessHours(epochSec);
+
+    if (isAnswered) {
+      totalAnswered++;
+    } else {
+      totalMissed++;
+      if (outOfHours) outOfHoursMissed++;
+      else inHoursMissed++;
+    }
+
+    const lineName = c.aircallNumberName || 'Team Line';
+    if (!numbersBreakdownMap.has(lineName)) {
+      numbersBreakdownMap.set(lineName, {
+        numberId: 0,
+        name: lineName,
+        digits: c.aircallNumberDigits || '',
+        assignedUser: c.author && c.author !== 'Aircall' ? c.author : resolveRepFromNumber(lineName),
+        totalInbound: 0,
+        totalAnswered: 0,
+        totalMissed: 0,
+      });
+    }
+    const lineItem = numbersBreakdownMap.get(lineName);
+    lineItem.totalInbound++;
+    if (isAnswered) lineItem.totalAnswered++;
+    else lineItem.totalMissed++;
+
+    const authorName = c.author && c.author !== 'Aircall'
+      ? c.author
+      : resolveRepFromNumber(lineName);
+
+    enrichedCalls.push({
+      id: c.callId || c.id,
+      callType: isAnswered ? 'answered' : 'missed',
+      startedAt: new Date(callTimeMs).toISOString(),
+      duration: parseDuration(c.duration),
+      callerNumber: c.phoneNumber || c.callerNumber || c.aircallNumberDigits || 'Unknown',
+      aircallNumberName: lineName,
+      aircallUser: authorName ? { name: authorName } : null,
+      missedReason: isAnswered ? 'Answered' : formatMissedReason(c.missedCallReason, outOfHours),
+    });
+  }
+
+  const totalInbound = allInboundCalls.length;
+  const answeredRate = totalInbound > 0 ? Math.round((totalAnswered / totalInbound) * 100) : 0;
+  const missedRate = totalInbound > 0 ? Math.round((totalMissed / totalInbound) * 100) : 0;
+
+  return {
+    summary: {
+      totalInbound,
+      totalAnswered,
+      answeredRate,
+      totalMissed,
+      missedRate,
+      inHoursMissed,
+      outOfHoursMissed,
+    },
+    numbersBreakdown: Array.from(numbersBreakdownMap.values()),
+    calls: enrichedCalls,
+  };
+}
+
 export async function runCallsReport(dateString: string, recipients: string[], fromAddress?: string): Promise<any> {
   const db = admin.firestore();
   functions.logger.info(`Generating calls report for date: ${dateString}`);
@@ -287,6 +412,29 @@ export async function runCallsReport(dateString: string, recipients: string[], f
     const callDate = new Date(c.date);
     return callDate >= targetStart && callDate <= targetEnd;
   });
+
+  // Fallback to Firestore captured inbound calls if live Aircall API returned nothing or had unconfigured credentials
+  if (!inboundReport || inboundReport.summary?.totalInbound === 0) {
+    functions.logger.info('Live Aircall inbound data not available or empty. Querying Firestore captured calls...');
+    try {
+      const unassignedSnap = await db.collection('unassigned_calls').get();
+      const unassignedCalls = unassignedSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((c: any) => {
+          if (!c.date) return false;
+          const d = new Date(c.date);
+          return d >= targetStart && d <= targetEnd;
+        });
+
+      const fsInboundReport = buildInboundReportFromFirestore(rawCalls, unassignedCalls, startEpoch);
+      if (fsInboundReport && fsInboundReport.summary.totalInbound > 0) {
+        functions.logger.info(`Reconstructed ${fsInboundReport.summary.totalInbound} inbound calls from Firestore.`);
+        inboundReport = fsInboundReport;
+      }
+    } catch (fsErr) {
+      functions.logger.warn('Failed to reconstruct inbound calls from Firestore:', fsErr);
+    }
+  }
 
   const totalInboundCallsCount = inboundReport?.summary?.totalInbound || 0;
 
@@ -370,10 +518,22 @@ export async function runCallsReport(dateString: string, recipients: string[], f
     };
   });
 
+  // Separate outbound calls from inbound calls so inbound calls aren't counted as outbound
+  const isCallInbound = (c: any) => {
+    if (c.direction === 'inbound') return true;
+    if (typeof c.notes === 'string') {
+      const lower = c.notes.toLowerCase();
+      if (lower.includes('inbound call') || lower.includes('missed inbound')) return true;
+    }
+    return false;
+  };
+
+  const outboundCalls = populatedCalls.filter(c => !isCallInbound(c));
+
   // Outcomes vs attempts deduplication
   const finalCalls: any[] = [];
   const callsByLead: Record<string, any[]> = {};
-  populatedCalls.forEach(c => {
+  outboundCalls.forEach(c => {
     if (!callsByLead[c.leadId]) callsByLead[c.leadId] = [];
     callsByLead[c.leadId].push(c);
   });
@@ -881,6 +1041,11 @@ export async function runCallsReport(dateString: string, recipients: string[], f
  */
 export const sendDailyCallsReport = functions
   .region("australia-southeast1")
+  .runWith({
+    secrets: ["AIRCALL_API_ID", "AIRCALL_API_TOKEN"],
+    memory: "1GB",
+    timeoutSeconds: 300,
+  })
   .pubsub.schedule("0 * * * *")
   .timeZone("Australia/Sydney")
   .onRun(async (context) => {

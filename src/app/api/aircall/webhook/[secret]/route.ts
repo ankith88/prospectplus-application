@@ -115,6 +115,7 @@ export async function POST(
       const activityData = {
         type: 'Call',
         date,
+        direction: direction || 'inbound',
         duration: formatDuration(duration),
         notes,
         callId,

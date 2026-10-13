@@ -95,6 +95,16 @@ export const EXCLUDED_LOGIN_ACTIVITY_UIDS = [
   'L3hjsZYldoVjVr8MAFRJt0bSGL12'
 ];
 
+export const ALLOWED_LOGIN_ACTIVITY_UIDS = [
+  'jHLpIZ8r4tf0IJkuRQZXG8rUR333'
+];
+
+export function canAccessLoginActivity(uid?: string | null, isSuperAdmin: boolean = false): boolean {
+  if (!uid) return false;
+  if (ALLOWED_LOGIN_ACTIVITY_UIDS.includes(uid)) return true;
+  return isSuperAdmin && !EXCLUDED_LOGIN_ACTIVITY_UIDS.includes(uid);
+}
+
 export const ALLOWED_ASK_UIDS = [
   'ncyhwLtOG1W7TZ43PkYCcObeCAf2',
   'xmvOICErk9WvpS8Psc9Geys2QQ62',

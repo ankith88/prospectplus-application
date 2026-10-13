@@ -3,12 +3,12 @@
 import LoginActivityReport from '@/components/admin/login-report';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader } from '@/components/ui/loader';
-import { EXCLUDED_LOGIN_ACTIVITY_UIDS } from '@/lib/constants';
+import { canAccessLoginActivity } from '@/lib/constants';
 
 export default function LoginReportPage() {
-  const { userProfile, loading, isSuperAdmin } = useAuth();
+  const { user, userProfile, loading, isSuperAdmin } = useAuth();
 
-  const isAuthorized = isSuperAdmin && !EXCLUDED_LOGIN_ACTIVITY_UIDS.includes(userProfile?.uid || '');
+  const isAuthorized = canAccessLoginActivity(userProfile?.uid || user?.uid, isSuperAdmin);
 
   if (loading) {
     return (

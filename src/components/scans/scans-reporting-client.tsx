@@ -189,11 +189,50 @@ const getPeriods = (filterDateRange: string, customStartDate: string, customEndD
   let prevStart = new Date(todayStart);
   let prevEnd = new Date(today);
 
-  if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
+  const normalized = filterDateRange?.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  if (normalized === 'thismonth') {
+    const range = getQuickDateRange('thismonth');
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to);
+    currentEnd.setHours(23, 59, 59, 999);
+    
+    const prevRange = getQuickDateRange('lastmonth');
+    prevStart = new Date(prevRange.from);
+    prevStart.setHours(0, 0, 0, 0);
+    prevEnd = new Date(prevRange.to);
+    prevEnd.setHours(23, 59, 59, 999);
+  } else if (normalized === 'lastmonth') {
+    const range = getQuickDateRange('lastmonth');
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to);
+    currentEnd.setHours(23, 59, 59, 999);
+    
+    const twoMonthsAgo = new Date(currentStart);
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 1);
+    prevStart = new Date(twoMonthsAgo.getFullYear(), twoMonthsAgo.getMonth(), 1, 0, 0, 0, 0);
+    prevEnd = new Date(twoMonthsAgo.getFullYear(), twoMonthsAgo.getMonth() + 1, 0, 23, 59, 59, 999);
+  } else if (normalized === 'thisweek') {
+    const range = getQuickDateRange('thisweek');
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to);
+    currentEnd.setHours(23, 59, 59, 999);
+    
+    const prevRange = getQuickDateRange('lastweek');
+    prevStart = new Date(prevRange.from);
+    prevStart.setHours(0, 0, 0, 0);
+    prevEnd = new Date(prevRange.to);
+    prevEnd.setHours(23, 59, 59, 999);
+  } else if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
     const helperParam = filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange);
     const range = getQuickDateRange(helperParam);
-    currentStart = range.from;
-    currentEnd = range.to;
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to || range.from);
+    currentEnd.setHours(23, 59, 59, 999);
     
     const diffTime = currentEnd.getTime() - currentStart.getTime();
     prevEnd = new Date(currentStart.getTime() - 1);
@@ -219,7 +258,7 @@ const getPeriods = (filterDateRange: string, customStartDate: string, customEndD
   }
 
   return { currentStart, currentEnd, prevStart, prevEnd };
-}
+};
 
 export function ScansReportingClient({
   hideFilters = false,

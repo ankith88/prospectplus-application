@@ -157,11 +157,50 @@ const getPeriods = (filterDateRange: string, customStartDate: string, customEndD
   let prevStart = new Date(todayStart);
   let prevEnd = new Date(today);
 
-  if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
+  const normalized = filterDateRange?.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  if (normalized === 'thismonth') {
+    const range = getQuickDateRange('thismonth');
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to);
+    currentEnd.setHours(23, 59, 59, 999);
+    
+    const prevRange = getQuickDateRange('lastmonth');
+    prevStart = new Date(prevRange.from);
+    prevStart.setHours(0, 0, 0, 0);
+    prevEnd = new Date(prevRange.to);
+    prevEnd.setHours(23, 59, 59, 999);
+  } else if (normalized === 'lastmonth') {
+    const range = getQuickDateRange('lastmonth');
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to);
+    currentEnd.setHours(23, 59, 59, 999);
+    
+    const twoMonthsAgo = new Date(currentStart);
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 1);
+    prevStart = new Date(twoMonthsAgo.getFullYear(), twoMonthsAgo.getMonth(), 1, 0, 0, 0, 0);
+    prevEnd = new Date(twoMonthsAgo.getFullYear(), twoMonthsAgo.getMonth() + 1, 0, 23, 59, 59, 999);
+  } else if (normalized === 'thisweek') {
+    const range = getQuickDateRange('thisweek');
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to);
+    currentEnd.setHours(23, 59, 59, 999);
+    
+    const prevRange = getQuickDateRange('lastweek');
+    prevStart = new Date(prevRange.from);
+    prevStart.setHours(0, 0, 0, 0);
+    prevEnd = new Date(prevRange.to);
+    prevEnd.setHours(23, 59, 59, 999);
+  } else if (filterDateRange && filterDateRange !== 'all' && filterDateRange !== 'custom') {
     const helperParam = filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange);
     const range = getQuickDateRange(helperParam);
-    currentStart = range.from;
-    currentEnd = range.to;
+    currentStart = new Date(range.from);
+    currentStart.setHours(0, 0, 0, 0);
+    currentEnd = new Date(range.to || range.from);
+    currentEnd.setHours(23, 59, 59, 999);
     
     const diffTime = currentEnd.getTime() - currentStart.getTime();
     prevEnd = new Date(currentStart.getTime() - 1);
@@ -406,43 +445,7 @@ export async function GET(request: Request) {
       if (matchesFilter && !filterUnlinked && filterCustomer && !companyLower.includes(filterCustomer.toLowerCase())) matchesFilter = false;
       
       const isSpecificSearch = filterBarcode.trim() !== '' || filterConnoteNumber.trim() !== '';
-      
-      if (matchesFilter && filterDateRange !== 'all' && !isSpecificSearch) {
-        const checkDate = (dateStr: string) => {
-          if (!dateStr) return false;
-          let d = parseDateString(dateStr);
-          if (isNaN(d.getTime())) return false;
 
-          d.setHours(0, 0, 0, 0);
-
-          if (filterDateRange === 'custom') {
-            const start = customStartDate ? new Date(customStartDate) : null;
-            if (start) start.setHours(0,0,0,0);
-            const end = customEndDate ? new Date(customEndDate) : null;
-            if (end) end.setHours(23,59,59,999);
-
-            if (start && end) return d >= start && d <= end;
-            if (start) return d >= start;
-            if (end) return d <= end;
-            return true;
-          }
-          
-          const helperParam = filterDateRange === 'last_7' ? 'last7' : (filterDateRange === 'last_30' ? 'last30' : filterDateRange);
-          const range = getQuickDateRange(helperParam);
-          const fromDate = new Date(range.from);
-          fromDate.setHours(0,0,0,0);
-          const toDate = new Date(range.to || range.from);
-          toDate.setHours(23,59,59,999);
-          
-          return d >= fromDate && d <= toDate;
-        };
-
-        const hasMatchingScan = pkg.scans?.some(scan => checkDate(scan.updated_at));
-        if (!hasMatchingScan && !checkDate(pkg.sync_date)) {
-          matchesFilter = false;
-        }
-      }
-      
       let latestScanFilter = pkg.scans?.[pkg.scans.length - 1];
       if (matchesFilter && pkg.scans && pkg.scans.length > 0) {
         latestScanFilter = pkg.scans.reduce((latest, current) => {
@@ -466,7 +469,36 @@ export async function GET(request: Request) {
 
       if (!matchesFilter) continue;
 
-      // Customer Health Metrics (calculated for packages matching active filters)
+      // Collect all scan/sync dates for this package
+      const allDates: Date[] = [];
+      if (pkg.sync_date) {
+        const d = parseDateString(pkg.sync_date);
+        if (d && !isNaN(d.getTime())) allDates.push(d);
+      }
+      pkg.scans?.forEach(s => {
+        if (s.updated_at) {
+          const d = parseDateString(s.updated_at);
+          if (d && !isNaN(d.getTime())) allDates.push(d);
+        }
+      });
+
+      // Determine if package has activity in current period and/or previous comparison period
+      let inCurrentPeriod = false;
+      let inPrevPeriod = false;
+
+      if (filterDateRange === 'all' || isSpecificSearch) {
+        inCurrentPeriod = true;
+      } else {
+        inCurrentPeriod = allDates.some(d => d >= currentStart && d <= currentEnd);
+        if (prevStart && prevEnd && !isNaN(prevStart.getTime()) && prevStart.getTime() > 0) {
+          inPrevPeriod = allDates.some(d => d >= prevStart && d <= prevEnd);
+        }
+      }
+
+      // If package has no activity in either current or previous period, skip it
+      if (!inCurrentPeriod && !inPrevPeriod) continue;
+
+      // Customer Health Metrics (calculated for packages matching active filters in either period)
       const custHealthName = companyName || 'Unlinked';
       if (!customerUsage[custHealthName]) {
         customerUsage[custHealthName] = {
@@ -482,29 +514,43 @@ export async function GET(request: Request) {
         customerUsage[custHealthName].companyId = companyId;
       }
 
-      const allDates: Date[] = [];
-      if (pkg.sync_date) allDates.push(parseDateString(pkg.sync_date));
-      pkg.scans?.forEach(s => {
-        if (s.updated_at) allDates.push(parseDateString(s.updated_at));
-      });
-
       allDates.forEach(d => {
-        if (isNaN(d.getTime())) return;
-        
         if (!customerUsage[custHealthName].firstScanDate || d < customerUsage[custHealthName].firstScanDate!) {
           customerUsage[custHealthName].firstScanDate = d;
         }
         if (!customerUsage[custHealthName].lastScanDate || d > customerUsage[custHealthName].lastScanDate!) {
           customerUsage[custHealthName].lastScanDate = d;
         }
-
-        if (d >= currentStart && d <= currentEnd) {
-          customerUsage[custHealthName].currentPeriodScans++;
-          if (pkg.code) customerUsage[custHealthName].currentPeriodUniquePackages.add(pkg.code);
-        } else if (d >= prevStart && d <= prevEnd) {
-          customerUsage[custHealthName].prevPeriodScans++;
-        }
       });
+
+      if (pkg.scans && pkg.scans.length > 0) {
+        pkg.scans.forEach(s => {
+          if (!s.updated_at) return;
+          const d = parseDateString(s.updated_at);
+          if (!d || isNaN(d.getTime())) return;
+          if (filterDateRange === 'all' || isSpecificSearch || (d >= currentStart && d <= currentEnd)) {
+            customerUsage[custHealthName].currentPeriodScans++;
+          } else if (d >= prevStart && d <= prevEnd) {
+            customerUsage[custHealthName].prevPeriodScans++;
+          }
+        });
+      } else if (pkg.sync_date) {
+        const d = parseDateString(pkg.sync_date);
+        if (d && !isNaN(d.getTime())) {
+          if (filterDateRange === 'all' || isSpecificSearch || (d >= currentStart && d <= currentEnd)) {
+            customerUsage[custHealthName].currentPeriodScans++;
+          } else if (d >= prevStart && d <= prevEnd) {
+            customerUsage[custHealthName].prevPeriodScans++;
+          }
+        }
+      }
+
+      if (pkg.code && inCurrentPeriod) {
+        customerUsage[custHealthName].currentPeriodUniquePackages.add(pkg.code);
+      }
+
+      // ONLY continue to current period dashboard metrics & charts if this package was active in the current period
+      if (!inCurrentPeriod) continue;
 
       filteredCount++;
 
@@ -627,19 +673,23 @@ export async function GET(request: Request) {
         }
         speedCustomerCount[speed].add(custName);
 
-        const date = getLocalIsoDate(scan.updated_at);
-        if (!seenDates.has(date)) {
-          seenDates.add(date);
-          dateCount[date] = (dateCount[date] || 0) + 1;
-        }
-        
-        const prodType = scan.product_type || 'Unknown';
-        uniqueProductTypes.add(prodType);
-        const dateProdKey = `${date}|${prodType}`;
-        if (!seenDateProd.has(dateProdKey)) {
-          seenDateProd.add(dateProdKey);
-          if (!productTypeDaily[date]) productTypeDaily[date] = {};
-          productTypeDaily[date][prodType] = (productTypeDaily[date][prodType] || 0) + 1;
+        const scanDate = parseDateString(scan.updated_at);
+        const isScanInCurrent = filterDateRange === 'all' || isSpecificSearch || (scanDate && !isNaN(scanDate.getTime()) && scanDate >= currentStart && scanDate <= currentEnd);
+        if (isScanInCurrent) {
+          const date = getLocalIsoDate(scan.updated_at);
+          if (!seenDates.has(date)) {
+            seenDates.add(date);
+            dateCount[date] = (dateCount[date] || 0) + 1;
+          }
+          
+          const prodType = scan.product_type || 'Unknown';
+          uniqueProductTypes.add(prodType);
+          const dateProdKey = `${date}|${prodType}`;
+          if (!seenDateProd.has(dateProdKey)) {
+            seenDateProd.add(dateProdKey);
+            if (!productTypeDaily[date]) productTypeDaily[date] = {};
+            productTypeDaily[date][prodType] = (productTypeDaily[date][prodType] || 0) + 1;
+          }
         }
       });
     }

@@ -152,10 +152,22 @@ export async function POST(request: Request) {
       };
     });
 
+    // Separate outbound calls from inbound calls so inbound calls are not counted as outbound
+    const isCallInbound = (c: any) => {
+      if (c.direction === 'inbound') return true;
+      if (typeof c.notes === 'string') {
+        const lower = c.notes.toLowerCase();
+        if (lower.includes('inbound call') || lower.includes('missed inbound')) return true;
+      }
+      return false;
+    };
+
+    const outboundCalls = populatedCalls.filter(c => !isCallInbound(c));
+
     // Outcomes vs attempts deduplication logic matching frontend / Firestore service
     const finalCalls: any[] = [];
     const callsByLead: Record<string, any[]> = {};
-    populatedCalls.forEach(c => {
+    outboundCalls.forEach(c => {
       if (!callsByLead[c.leadId]) callsByLead[c.leadId] = [];
       callsByLead[c.leadId].push(c);
     });

@@ -48,7 +48,7 @@ import { NotificationCenter } from "@/components/notification-center"
 import { FranchiseeSwitcher } from "@/components/franchisee-switcher"
 import { UniversalSearch } from "@/components/universal-search"
 import { CommandPalette } from "@/components/command-palette"
-import { salesReps, ALLOWED_ASK_UIDS, EXCLUDED_LOGIN_ACTIVITY_UIDS } from "@/lib/constants"
+import { salesReps, ALLOWED_ASK_UIDS, EXCLUDED_LOGIN_ACTIVITY_UIDS, canAccessLoginActivity } from "@/lib/constants"
 import { DailyAreaLogDialog } from "@/components/daily-area-log-dialog"
 import { UnassignedCallDialog } from "@/components/unassigned-call-dialog"
 import { getTodayDeploymentForUser } from "@/services/firebase"
@@ -758,6 +758,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const canViewTickets = canView('tickets');
   const canViewLpoLeads = canView('lpoLeads');
   const canAccessAsk = !!userProfile?.uid && ALLOWED_ASK_UIDS.includes(userProfile.uid);
+  const canAccessLoginReport = canAccessLoginActivity(userProfile?.uid || user?.uid, isSuperAdmin);
   const activeRoleStr = userProfile?.activeRole as string;
   const isAleynaUser = userProfile?.email?.toLowerCase() === 'aleyna.harnett@mailplus.com.au' || userProfile?.displayName?.toLowerCase().includes('aleyna') || user?.uid === 'a543AEr3TcaHyj4c1Gh0fJoQ6UB2';
   const canViewAleynaTraining = isSuperAdmin || isAleynaUser || ['admin', 'super user', 'Operations', 'operations', 'Operations Manager', 'operations manager'].includes(activeRoleStr) || isOperationsRole;
@@ -2378,7 +2379,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </SidebarContent>
         <SidebarFooter className="p-0">
-          {(isSuperAdmin || userProfile?.activeRole === 'Sales Manager') && (
+          {(isSuperAdmin || userProfile?.activeRole === 'Sales Manager' || canAccessLoginReport) && (
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => toggleExpand("admin-settings")}>
@@ -2388,7 +2389,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarMenuButton>
                 {expandedStates["admin-settings"] && (
                   <SidebarMenuSub>
-                    {isSuperAdmin && !EXCLUDED_LOGIN_ACTIVITY_UIDS.includes(userProfile?.uid || '') && (
+                    {canAccessLoginReport && (
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={isActive('/admin/login-report')}>
                           <Link href="/admin/login-report">
@@ -2418,30 +2419,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     )}
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-leave')}>
-                        <Link href="/admin/settings/am-leave">
-                          <CalendarOff />
-                          <span>AM Leave Settings</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive('/admin/services')}>
-                        <Link href="/admin/services">
-                          <Package className="h-4 w-4" />
-                          <span>Service Line Items & Commissions</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/cancellation-reasons')}>
-                        <Link href="/admin/settings/cancellation-reasons">
-                          <ListTree className="h-4 w-4" />
-                          <span>Cancellation Hierarchy</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                    {(isSuperAdmin || userProfile?.activeRole === 'Sales Manager') && (
+                      <>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/am-leave')}>
+                            <Link href="/admin/settings/am-leave">
+                              <CalendarOff />
+                              <span>AM Leave Settings</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive('/admin/services')}>
+                            <Link href="/admin/services">
+                              <Package className="h-4 w-4" />
+                              <span>Service Line Items & Commissions</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={isActive('/admin/settings/cancellation-reasons')}>
+                            <Link href="/admin/settings/cancellation-reasons">
+                              <ListTree className="h-4 w-4" />
+                              <span>Cancellation Hierarchy</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </>
+                    )}
                     {isSuperAdmin && (
                     <>
                     <SidebarMenuSubItem>
