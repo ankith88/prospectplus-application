@@ -88,6 +88,7 @@ import {
 } from 'lucide-react'
 import { rekeyLeadToNetSuite } from '@/services/rekey-lead'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
+import { ActiveServiceChangeDialog } from '@/components/customer-success/active-service-change-dialog'
 import { encryptLeadId } from '@/lib/localmile-security'
 import { isLeadActionableForUser, canReassignLead, canChangeBucket, isSaleDealsVisible, isAccountManagerUser, canFranchiseeAccessLead, canChangeFranchisee, isSignedCustomer, isLostCustomerOrLead, isSignedOrWonCompany, isFranchiseeRole, isAccountOrSalesManager, isDialerRole, isOutboundLead } from '@/lib/lead-permissions'
 import { AccessDenied } from '@/components/access-denied'
@@ -384,6 +385,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
     const [isOnboardingDialogOpen, setIsOnboardingDialogOpen] = useState(false);
+    const [activeCsRequest, setActiveCsRequest] = useState<any | null>(null);
+    const [isActiveCsDialogOpen, setIsActiveCsDialogOpen] = useState(false);
+
+    useEffect(() => {
+        if (!lead?.id) return;
+        let isMounted = true;
+        const fetchActiveCs = async () => {
+            try {
+                const res = await fetch(`/api/cs-requests?leadId=${encodeURIComponent(lead.id)}&prospectPlusId=${encodeURIComponent(lead.prospectPlusId || '')}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted && data.success) {
+                        setActiveCsRequest(data.activeRequest || null);
+                    }
+                }
+            } catch (e) {
+                console.warn('[LeadProfile] Could not fetch active CS request:', e);
+            }
+        };
+        fetchActiveCs();
+        return () => { isMounted = false; };
+    }, [lead?.id, lead?.prospectPlusId, lead?.serviceChangeRequested]);
 
     const handleDismissDuplicate = async () => {
         setIsDismissed(true);
@@ -10441,13 +10464,30 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
                                 <CalendarCheck className="mr-2 h-4 w-4 text-emerald-600" />Organise Onboarding Request
                             </Button>
-                            <Button 
-                                className="w-full justify-start font-medium bg-background hover:bg-sky-50 text-sky-800 border-sky-200 hover:border-sky-300" 
-                                variant="outline" 
-                                onClick={() => window.open(`/customer-request/${lead.id}`, '_blank')}
-                            >
-                                <Wrench className="mr-2 h-4 w-4 text-[#095c7b]" />Request Service Change
-                            </Button>
+                            {activeCsRequest ? (
+                                <Button 
+                                    className="w-full justify-between font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 hover:border-amber-400 shadow-sm transition-all" 
+                                    variant="outline" 
+                                    onClick={() => setIsActiveCsDialogOpen(true)}
+                                    title="Click to view, edit, or cancel this active service change request"
+                                >
+                                    <div className="flex items-center gap-2 truncate">
+                                        <Wrench className="h-4 w-4 text-amber-700 shrink-0" />
+                                        <span className="truncate">Service Change Request</span>
+                                    </div>
+                                    <Badge variant="outline" className="bg-amber-200/90 text-amber-900 border-amber-400 text-[10px] uppercase font-bold shrink-0">
+                                        Pending
+                                    </Badge>
+                                </Button>
+                            ) : (
+                                <Button 
+                                    className="w-full justify-start font-medium bg-background hover:bg-sky-50 text-sky-800 border-sky-200 hover:border-sky-300" 
+                                    variant="outline" 
+                                    onClick={() => window.open(`/customer-request/${lead.id}`, '_blank')}
+                                >
+                                    <Wrench className="mr-2 h-4 w-4 text-[#095c7b]" />Request Service Change
+                                </Button>
+                            )}
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted" variant="outline" onClick={() => { setResendScfId(undefined); setIsServiceSelectionOpen(true); setServiceSelectionMode('Confirm Signup'); }}>
                                 <Mail className="mr-2 h-4 w-4" />Resend Signup Confirmation
                             </Button>
@@ -12273,6 +12313,28 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         companyName={lead.companyName}
         companyAbn={lead.abn}
         companyAddress={lead.address || (lead as any).customerAddress}
+      />
+    )}
+
+    {activeCsRequest && (
+      <ActiveServiceChangeDialog
+        open={isActiveCsDialogOpen}
+        onOpenChange={setIsActiveCsDialogOpen}
+        request={activeCsRequest}
+        leadId={lead.id}
+        companyName={lead.companyName}
+        userDisplayName={userProfile?.displayName || userProfile?.email || 'Staff User'}
+        onRequestCancelled={() => {
+          setActiveCsRequest(null);
+          setLead(prev => ({
+            ...prev,
+            serviceChangeRequested: false,
+            customerStatus: prev.customerStatus === 'Service Change Requested' ? 'Signed' : prev.customerStatus,
+          }));
+        }}
+        onRequestUpdated={(updatedReq) => {
+          setActiveCsRequest(updatedReq);
+        }}
       />
     )}
     </>

@@ -331,3 +331,194 @@ export async function POST(request: Request) {
   }
 }
 
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const leadId = searchParams.get('leadId');
+    const prospectPlusId = searchParams.get('prospectPlusId');
+    const requestId = searchParams.get('requestId');
+
+    if (requestId) {
+      const docSnap = await db.collection('cs_requests').doc(requestId).get();
+      if (!docSnap.exists) {
+        return NextResponse.json({ success: false, error: 'Request not found' }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, request: { id: docSnap.id, ...docSnap.data() } });
+    }
+
+    if (!leadId && !prospectPlusId) {
+      return NextResponse.json({ success: false, error: 'leadId or prospectPlusId is required' }, { status: 400 });
+    }
+
+    const candidateIds = Array.from(new Set([leadId, prospectPlusId].filter(Boolean))) as string[];
+    const queries = [];
+    for (const id of candidateIds) {
+      queries.push(db.collection('cs_requests').where('leadId', '==', id).get());
+      queries.push(db.collection('cs_requests').where('prospectPlusId', '==', id).get());
+    }
+
+    const snapshots = await Promise.all(queries);
+    const map = new Map<string, any>();
+    for (const snap of snapshots) {
+      for (const d of snap.docs) {
+        map.set(d.id, { id: d.id, ...d.data() });
+      }
+    }
+
+    const allRequests = Array.from(map.values());
+    const activeRequests = allRequests.filter(r => 
+      r.requestType === 'change_of_service' && 
+      (!r.status || r.status === 'Pending' || r.status === 'In Progress')
+    );
+
+    return NextResponse.json({
+      success: true,
+      activeRequest: activeRequests[0] || null,
+      requests: allRequests,
+    });
+  } catch (error: any) {
+    console.error('[CS Requests GET Error]:', error);
+    return NextResponse.json({ success: false, error: error?.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { requestId, action, notes, requestedServices, effectiveDate, serviceChangeCategories, userDisplayName = 'Staff User' } = body;
+
+    if (!requestId) {
+      return NextResponse.json({ success: false, error: 'requestId is required' }, { status: 400 });
+    }
+
+    const reqRef = db.collection('cs_requests').doc(requestId);
+    const reqSnap = await reqRef.get();
+    if (!reqSnap.exists) {
+      return NextResponse.json({ success: false, error: 'CS request not found' }, { status: 404 });
+    }
+
+    const reqData = reqSnap.data() || {};
+    const leadId = reqData.leadId || '';
+    const collectionName = reqData.collectionName || 'companies';
+    const nowIso = new Date().toISOString();
+
+    if (action === 'cancel') {
+      // 1. Mark cs_request as Cancelled
+      const currentNotes = reqData.notes || '';
+      const cancelReasonNote = notes ? `\n[Cancellation Reason]: ${notes}` : '';
+      await reqRef.update({
+        status: 'Cancelled',
+        cancelledAt: nowIso,
+        cancelledBy: userDisplayName,
+        notes: `${currentNotes}${cancelReasonNote}`.trim(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // 2. Update company / lead doc: remove serviceChangeRequested flag
+      if (leadId) {
+        let targetCol = collectionName;
+        let docRef = db.collection(targetCol).doc(leadId);
+        let docSnap = await docRef.get();
+        if (!docSnap.exists) {
+          targetCol = targetCol === 'companies' ? 'leads' : 'companies';
+          docRef = db.collection(targetCol).doc(leadId);
+          docSnap = await docRef.get();
+        }
+
+        if (docSnap.exists) {
+          const docData = docSnap.data();
+          const compUpdates: any = {
+            serviceChangeRequested: false,
+            updatedAt: FieldValue.serverTimestamp(),
+          };
+          if (docData?.customerStatus === 'Service Change Requested') {
+            compUpdates.customerStatus = 'Signed';
+          }
+          await docRef.update(compUpdates);
+
+          // 3. Log activity
+          const actNote = `Active Change of Service request (#${requestId}) was cancelled by ${userDisplayName}.${notes ? `\nReason: ${notes}` : ''}`;
+          await docRef.collection('activity').add({
+            type: 'Update',
+            date: nowIso,
+            notes: actNote,
+            author: userDisplayName,
+            syncedWithNetSuite: false
+          });
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Service change request cancelled successfully'
+      });
+    }
+
+    if (action === 'update') {
+      const updates: any = {
+        updatedAt: FieldValue.serverTimestamp(),
+        lastEditedBy: userDisplayName,
+        lastEditedAt: nowIso,
+      };
+
+      if (requestedServices !== undefined && Array.isArray(requestedServices)) {
+        updates.requestedServices = requestedServices;
+      }
+      if (effectiveDate !== undefined) {
+        updates.effectiveDate = effectiveDate;
+      }
+      if (serviceChangeCategories !== undefined && Array.isArray(serviceChangeCategories)) {
+        updates.serviceChangeCategories = serviceChangeCategories;
+      }
+      if (notes !== undefined) {
+        updates.notes = notes;
+      }
+
+      await reqRef.update(updates);
+
+      // Log activity
+      if (leadId) {
+        let targetCol = collectionName;
+        let docRef = db.collection(targetCol).doc(leadId);
+        let docSnap = await docRef.get();
+        if (!docSnap.exists) {
+          targetCol = targetCol === 'companies' ? 'leads' : 'companies';
+          docRef = db.collection(targetCol).doc(leadId);
+          docSnap = await docRef.get();
+        }
+
+        if (docSnap.exists) {
+          const servicesSummary = (requestedServices || reqData.requestedServices || []).map((s: any) => {
+            const freq = Array.isArray(s.frequency) ? s.frequency.join(', ') : (s.frequency || 'Adhoc');
+            const rate = s.rate !== undefined ? `$${Number(s.rate).toFixed(2)}` : 'N/A';
+            return `${s.name} (${freq} @ ${rate})`;
+          }).join(', ');
+
+          const actNote = `Service Change Request (#${requestId}) was edited by ${userDisplayName}.\nEffective Date: ${effectiveDate || reqData.effectiveDate || 'N/A'}\nServices: ${servicesSummary || 'Unchanged'}${notes ? `\nNotes: ${notes}` : ''}`;
+
+          await docRef.collection('activity').add({
+            type: 'Update',
+            date: nowIso,
+            notes: actNote,
+            author: userDisplayName,
+            syncedWithNetSuite: false
+          });
+        }
+      }
+
+      const updatedSnap = await reqRef.get();
+      return NextResponse.json({
+        success: true,
+        message: 'Service change request updated successfully',
+        request: { id: updatedSnap.id, ...updatedSnap.data() }
+      });
+    }
+
+    return NextResponse.json({ success: false, error: `Invalid action: ${action}` }, { status: 400 });
+  } catch (error: any) {
+    console.error('[CS Requests PATCH Error]:', error);
+    return NextResponse.json({ success: false, error: error?.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+

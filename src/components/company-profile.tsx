@@ -48,6 +48,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { OrganiseOnboardingDialog } from '@/components/customer-success/organise-onboarding-dialog'
+import { ActiveServiceChangeDialog } from '@/components/customer-success/active-service-change-dialog'
 import { getOnboardingRequestByLeadId } from '@/services/onboarding-service'
 import type { OnboardingRequest } from '@/lib/types'
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
@@ -150,6 +151,28 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   const [cancellationThemes, setCancellationThemes] = useState<any[]>([]);
+  const [activeCsRequest, setActiveCsRequest] = useState<any | null>(null);
+  const [isActiveCsDialogOpen, setIsActiveCsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    let isMounted = true;
+    const fetchActiveCs = async () => {
+      try {
+        const res = await fetch(`/api/cs-requests?leadId=${encodeURIComponent(company.id)}&prospectPlusId=${encodeURIComponent(company.prospectPlusId || '')}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.success) {
+            setActiveCsRequest(data.activeRequest || null);
+          }
+        }
+      } catch (e) {
+        console.warn('[CompanyProfile] Could not fetch active CS request:', e);
+      }
+    };
+    fetchActiveCs();
+    return () => { isMounted = false; };
+  }, [company?.id, company?.prospectPlusId, company?.serviceChangeRequested]);
 
   useEffect(() => {
     const fetchThemes = async () => {
@@ -2394,13 +2417,30 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                     <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-primary border-primary/20" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
                         <CalendarCheck className="mr-2 h-4 w-4 text-primary" />Organise Onboarding Request
                     </Button>
-                    <Button 
-                        className="w-full justify-start font-medium bg-background hover:bg-sky-50 text-sky-800 border-sky-200 hover:border-sky-300" 
-                        variant="outline" 
-                        onClick={() => window.open(`/customer-request/${company.id}`, '_blank')}
-                    >
-                        <Wrench className="mr-2 h-4 w-4 text-[#095c7b]" />Request Service Change
-                    </Button>
+                    {activeCsRequest ? (
+                        <Button 
+                            className="w-full justify-between font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 hover:border-amber-400 shadow-sm transition-all" 
+                            variant="outline" 
+                            onClick={() => setIsActiveCsDialogOpen(true)}
+                            title="Click to view, edit, or cancel this active service change request"
+                        >
+                            <div className="flex items-center gap-2 truncate">
+                                <Wrench className="h-4 w-4 text-amber-700 shrink-0" />
+                                <span className="truncate">Service Change Request</span>
+                            </div>
+                            <Badge variant="outline" className="bg-amber-200/90 text-amber-900 border-amber-400 text-[10px] uppercase font-bold shrink-0">
+                                Pending
+                            </Badge>
+                        </Button>
+                    ) : (
+                        <Button 
+                            className="w-full justify-start font-medium bg-background hover:bg-sky-50 text-sky-800 border-sky-200 hover:border-sky-300" 
+                            variant="outline" 
+                            onClick={() => window.open(`/customer-request/${company.id}`, '_blank')}
+                        >
+                            <Wrench className="mr-2 h-4 w-4 text-[#095c7b]" />Request Service Change
+                        </Button>
+                    )}
                     <Button className="w-full justify-start bg-background hover:bg-muted" variant="outline" onClick={() => setIsLogNoteOpen(true)}>
                         <ClipboardEdit className="mr-2 h-4 w-4" />Log a Note
                     </Button>
@@ -3132,6 +3172,28 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         }
       }}
     />
+
+    {activeCsRequest && (
+      <ActiveServiceChangeDialog
+        open={isActiveCsDialogOpen}
+        onOpenChange={setIsActiveCsDialogOpen}
+        request={activeCsRequest}
+        leadId={company.id}
+        companyName={company.companyName}
+        userDisplayName={userProfile?.displayName || userProfile?.email || 'Staff User'}
+        onRequestCancelled={() => {
+          setActiveCsRequest(null);
+          setCompany(prev => ({
+            ...prev,
+            serviceChangeRequested: false,
+            customerStatus: prev.customerStatus === 'Service Change Requested' ? 'Signed' : prev.customerStatus,
+          }));
+        }}
+        onRequestUpdated={(updatedReq) => {
+          setActiveCsRequest(updatedReq);
+        }}
+      />
+    )}
     </>
   )
 }
