@@ -39,6 +39,7 @@ env:
     secret: MICROSOFT_CLIENT_ID
   - variable: MICROSOFT_CLIENT_SECRET
     secret: MICROSOFT_CLIENT_SECRET
-
+  - variable: EXA_API_KEY
+    secret: EXA_API_KEY
 
 # Re-trigger rollout: 2026-10-09T10:28:00+11:00
