@@ -9,7 +9,7 @@ The **Lead Intelligence & Reach Hub** in ProspectPlus is an enterprise-grade aut
 
 ### Why This Matters for Sales Leadership
 - **Zero Manual Pre-Call Research:** Reps spend 100% of their prep time pitching rather than combing corporate websites, LinkedIn, and registers.
-- **Accurate Courier & Dispatch Footprint:** Instantly reveals existing couriers (e.g., Australia Post, StarTrack, Sendle, Aramex), daily order cutoff times, return policies, and fulfillment locations.
+- **Accurate Courier & Dispatch Footprint:** Instantly reveals existing couriers (e.g., Australia Post, StarTrack, Sendle, Aramex), daily order cutoff times, return policies, and warehouse locations.
 - **Direct Access to Operational Decision Makers:** Surfaces Logistics, Warehouse, Operations, and Supply Chain managers from LinkedIn with 1-click addition to CRM contacts.
 - **Competitive Pain-Point Leverage:** Detects and flags public delivery complaints with competitor couriers, arming reps with immediate conversion hooks.
 
@@ -18,103 +18,150 @@ The **Lead Intelligence & Reach Hub** in ProspectPlus is an enterprise-grade aut
 ## 2. Visual Tour: Where Enriched Data Lives
 
 To access enriched data on any lead in ProspectPlus:
-1. Open the Lead record in the CRM.
+1. Open the Lead record in the CRM (`/leads/[leadId]`).
 2. Navigate to the **"Discovery"** tab in the main lead profile navigation.
 3. The **Lead Intelligence & Reach Hub** is positioned prominently at the top of the tab.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │  Lead Intelligence & Reach Hub   [✓ Enriched (AI)]  [✓ Agent Reach (Live)]                              │
-│  AI website classification, physical branches, PO boxes, live logistics, LinkedIn & sentiment.          │
+│  AI website classification, physical branches, PO boxes, live logistics signals, LinkedIn decision       │
+│  makers, and delivery sentiment.                                                                        │
 │                                                                                                         │
-│  [ ✨ Run Complete Intel (AI + Agent Reach) ]    [ 👥 Decision Makers (6) ]                              │
+│                              [ ✨ Run Complete Intel (AI + Agent Reach) ]                                │
+│                              [ 👥 Decision Makers (6) ]                                                 │
 ├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│  [ 📑 Synthesized Overview ]  [ 🌐 AI Website Scrape ]  [ 🧭 Agent Reach Signals ]                      │
+│  [ 📑 Synthesized Overview ]  [ 🌐 AI Website Scrape • ]  [ 🧭 Agent Reach Signals • ]                  │
 │  [ 👥 Decision Makers (6) ]   [ 💬 Social & Sentiment ]                                                 │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Screenshot 1: Hub Header & Primary Action Buttons
-The top right of the Hub features two consolidated action triggers:
+### Screenshot 1: Hub Header & Consolidated Action Triggers
+The top right of the Hub features two streamlined, high-contrast action triggers:
 
-![Hub Header Actions](./images/action_buttons.png)
+![Hub Header Actions](./images/hub_header_new.png)
 
-1. **`[✨] Run Complete Intel (AI + Agent Reach)`**: The master enrichment button. Executes both the AI Website Scraper and Agent Reach live web/LinkedIn indexing in parallel in 5–8 seconds.
-2. **`[👥] Decision Makers ({count})`**: Dedicated action opening the LinkedIn candidate search and contact creation dialog.
+1. **`[✨ Run Complete Intel (AI + Agent Reach)]` (Dark Teal Pill):** The unified master enrichment button. Simultaneously executes the AI Website Scraper and Agent Reach live web/LinkedIn indexing in parallel in 5–8 seconds.
+2. **`[👥 Decision Makers (6)]` (Light Slate Pill):** Dedicated shortcut opening the LinkedIn operational candidate drawer and contact creation directory.
 
 ---
 
 ### Screenshot 2: Synthesized Overview (The 30-Second Pre-Call Screen)
-The default landing view, designed for rapid sales rep orientation before picking up the phone:
+The default landing view, designed specifically for rapid sales rep orientation before dialing:
 
 ![Synthesized Overview](./images/synthesized_overview.png)
 
-- **Top Decision Maker Callout:** Highlights the primary operational signatory with title and direct `+ Add to Contacts` button.
-- **Dual-Source Comparison Grid:** Side-by-side audit comparing website crawl results with live Agent Reach web signals.
-- **Suggested Call Opener:** Tailored conversation starter referencing their actual carrier and cutoff time.
-- **Sales Talking Points:** Bullet points highlighting MailPlus daily driver collections and express flat-rate satchels.
-- **Social Proof Match:** Automatically matches similar signed MailPlus customers in the same industry category and suburb.
+This synthesized screen consolidates five critical selling assets into a single view:
+1. **Primary Decision Maker Banner:** Instantly presents the top operational executive with direct LinkedIn access and 1-click CRM contact sync.
+2. **Dual Intelligence Comparison Grid:** Side-by-side comparison of deep website crawler data against live external web & LinkedIn signals.
+3. **Executive Prospect Summary:** Concise narrative covering business size, online sales volume, physical store presence, and warehouse locations.
+4. **Suggested Product & Call Opener:** Tailored conversation starter referencing their specific order volume, multi-store logistics, and daily dispatch needs.
+5. **Suggested Personalisation:** Actionable guidance on pitching MailPlus daily driver pickups and sub-5kg flat-rate satchel savings.
 
 ---
 
-### Screenshot 3: Agent Reach Signals & AI Shipping Policy Summary
-Real-time logistics, courier verification, and dispatch SLAs:
+### Screenshot 3: Primary Decision Maker & 1-Click CRM Contact Sync
+Positioned at the top of the Synthesized Overview for zero-click visibility:
 
-![Agent Reach Signals](./images/agent_reach_signals.png)
+![Decision Maker Banner](./images/decision_maker_card_new.png)
 
-- **Detected Parcel Carriers:** Identifies active courier partners (e.g. Australia Post, StarTrack, Aramex).
-- **Daily Dispatch Cutoff:** Order cutoff times for same-day dispatch (e.g. `2:00 PM`).
-- **AI Shipping Policy & Carrier Summary:** Synthesizes verbose website shipping policies into 4 concise bullet points (Dispatch SLA, Carriers, Returns, and Sales Angle).
-- **Collapsible Source Drawer:** Expandable section holding verified web excerpts for full auditability.
+- **Targeted Operational Executive:** Displays full name and title (e.g., `Kerrie Nelson — General Manager at Proud Poppy Clothing`).
+- **`[Primary Decision Maker]` Badge:** Highlights the key individual who holds operational and budget authority.
+- **`[LinkedIn ↗]` Button:** One-click direct link to view their verified professional LinkedIn profile in a new tab.
+- **`[+ Add to Contacts]` Button:** Prominent dark teal button with crisp white typography. Clicking it immediately creates a permanent contact record in the CRM's **Contacts** tab and updates the button to `[✓ In Contacts]`.
 
 ---
 
-### Screenshot 4: Key Decision Makers (LinkedIn Real-Time Index)
-Live indexed operational personnel with one-click CRM contact sync:
+### Screenshot 4: Dual Intelligence Comparison Grid
+Juxtaposes website crawl data against real-time external web intelligence:
 
-![Decision Makers Grid](./images/decision_makers_linkedin.png)
+![Dual Intelligence Comparison](./images/dual_intel_signals.png)
 
-- **Operational Role Targeting:** Logistics Managers, Operations Heads, Warehouse Supervisors, and Founders.
-- **Match Confidence:** `High Match` badges highlight primary operational signatories.
-- **Direct LinkedIn Links:** Single-click external icon opens their verified LinkedIn profile.
-- **One-Click Contact Creation:** `+ Add to Contacts` instantly creates a permanent contact record in the CRM, transitioning to `[✓ In Contacts]`.
+- **AI Website Scrape (Direct Site Crawl):**
+  - **Industry Classification:** Granular industry tag (e.g., `RETAIL - CLOTHING FASHION — Women's Fashion Clothing & Accessories Retailer (Sizes 6-30)`).
+  - **eCommerce Cart Tech:** Detected store platform (e.g., `Shopify`), confirming instant integration with the free MailPlus ShipMate shipping app.
+  - **Physical Footprint:** Count of physical locations identified across Australia (e.g., `9 Australian Sites`).
+  - **Parcel Shipping Status:** Automated badge confirming whether the company actively ships physical packages (`✓ Verified Shipper`).
+  - **Social Proof Match:** Automatically cross-references CRM accounts to show signed MailPlus customers in the same industry vertical (e.g., `4 similar signed clients in CRM`).
+- **Agent Reach Live Signals (Exa Live Web + LinkedIn):**
+  - **Verified Domain:** Canonical root domain validated against registries (`proudpoppyclothing.com.au`).
+  - **Detected Parcel Carriers & Cutoff:** Flags current couriers (e.g., Australia Post, StarTrack) and daily dispatch order cutoffs.
+  - **Key Decision Makers Count:** Total operational profiles indexed on LinkedIn (`6 profiles identified`).
+  - **Social Handle:** Direct link to active Instagram profile (`@proudpoppyclothing`) for volume sizing.
+
+---
+
+### Screenshot 5: Executive Summary, Suggested Opener & Personalisation
+Provides sales reps with high-converting conversation openers tailored to the prospect's real logistics:
+
+![Executive Summary and Opener](./images/executive_summary_and_opener.png)
+
+- **Executive Prospect Summary:** Explains how the company operates, where they fulfill orders (e.g., Epping and Burleigh Heads warehouses), and that they ship hundreds of parcels weekly worldwide.
+- **Suggested Product:** The exact MailPlus offering to lead with (e.g., `Scheduled Daily Courier Pickup / Shipmate Express Parcels`).
+- **Suggested Opener:** Word-for-word cold call script ready to be delivered:
+  > *"Hi [Contact Name], it's [Name] from MailPlus. I'm calling about Proud Poppy Clothing — I noticed you're doing incredibly well with your online fashion retail, especially with 9 physical locations now and shipping hundreds of orders weekly. We help many fast-growing fashion brands like yours streamline their daily parcel pickups; I was curious what your current process looks like for getting all your online orders out the door each afternoon?"*
+- **Suggested Personalisation:** Tactical guidance highlighting dual-warehouse pickups, Shopify label printing integration, and sub-5kg satchel volume savings.
+
+---
+
+### Screenshot 6: AI Website Scrape — Classification, eCommerce & AP Relationship
+Clicking the **`[🌐 AI Website Scrape •]`** sub-navigation pill opens the full deep-crawl breakdown:
+
+![AI Website Scrape Full](./images/ai_website_scrape.png)
+
+![Industry and AP Signals](./images/industry_and_ap_signals.png)
+
+- **Classified Industry Category & Sub-Category:** High-fidelity vertical categorization with `[📦 Verified Parcel Shipper]` and `[🏢 Multi-Branch Footprint (9 Sites)]` verification badges.
+- **eCommerce & Accounting Stack:** Identifies cart infrastructure (`Shopify`) and accounting software (`Xero`, `MYOB`).
+- **Australia Post (AP) Relationship Signal:** Analyzes shipping policies and customer returns to identify existing postal arrangements, including prepaid return satchels and drop-off habits.
+
+---
+
+### Screenshot 7: Australian Branch Footprint & Location Directory
+Visualizes all physical stores and fulfillment centers identified across Australia:
+
+![Branch Footprint Directory](./images/branch_footprint_locations.png)
+
+- **State-by-State Filtering:** Instant filter pills for `[All (9)]`, `[NSW (2)]`, `[QLD (3)]`, `[VIC (4)]`, plus a live keyword search bar.
+- **Warehouse vs. Retail Differentiation:** Distinguishes commercial distribution hubs (e.g., *Burleigh Heads Warehouse — Warehouse / Distribution*) from storefronts (e.g., *Doncaster Westfield Store — Retail Store*).
+- **Multi-Location Logistics Pitch:** Reps can pitch centralized warehouse daily driver collections alongside scheduled inter-store satchel transfers.
 
 ---
 
 ## 3. Complete Enriched Fields Reference Table
 
-Below is the complete inventory of all data fields captured during enrichment, where each field appears on the Lead Profile, its internal CRM field path, and its strategic utility for sales reps:
+Below is the complete directory of all 27 data fields captured during enrichment, where each field appears on the Lead Profile, its internal CRM field path, and its strategic utility for sales reps:
 
 | # | Display Label / Field | UI Location in Profile | Internal CRM Field Path | Data Source | Example Value | Sales Rep Utility & Strategy |
 | :- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | **Enriched (AI) Badge** | Hub Header | `discoveryData.lastEnriched` | AI Crawler | `✓ Enriched (AI)` | Visual indicator that website crawl and industry classification are complete. |
-| **2** | **Agent Reach (Live) Badge** | Hub Header | `discoveryData.agentReachDossier.generatedAt` | Agent Reach | `✓ Agent Reach (Live)` | Visual indicator that live web logistics and LinkedIn search are active. |
-| **3** | **Top Decision Maker** | Synthesized Overview | `discoveryData.agentReachDossier.decisionMakers[0]` | LinkedIn Index | `Kerrie Nelson - General Manager` | Reps know exactly who runs company operations before dialing. |
-| **4** | **Match Confidence** | Synthesized Overview & Decision Makers Tab | `candidate.confidence` | LinkedIn Index | `High Match` | Highlights operational signatories vs general administrative staff. |
-| **5** | **Suggested Call Opener** | Synthesized Overview | `discoveryData.agentReachDossier.enrichment.suggestedOpener` | Gemini Synthesis | *"Hi Kerrie, it's Alex with MailPlus. I noticed Proud Poppy dispatches daily using Australia Post..."* | High-credibility, personalized conversation hook tailored to their shipping setup. |
-| **6** | **Sales Talking Points** | Synthesized Overview & Agent Reach Tab | `discoveryData.agentReachDossier.enrichment.talkingPoints` | Gemini Synthesis | • Guaranteed afternoon driver collection<br>• Sub-5kg express flat satchels | Eliminates rep hesitation; gives concrete value props for MailPlus. |
-| **7** | **Social Proof Signed Clients** | Synthesized Overview | `similarCustomers` | CRM Matcher | `4 signed clients in Women's Apparel (VIC)` | Reps can drop familiar local customer names during cold calls. |
-| **8** | **Detected Parcel Carriers** | Agent Reach Tab & Overview | `discoveryData.agentReachDossier.logisticsSignals.carrierDetected` | Exa Web Discovery | `Australia Post`, `StarTrack`, `Sendle` | Identifies incumbent courier contract to prepare rate and service comparisons. |
-| **9** | **Daily Dispatch Cutoff** | Agent Reach Tab & Overview | `discoveryData.agentReachDossier.logisticsSignals.cutoffTimes` | Exa Web Discovery | `2:00 PM AEST` | Reps pitch later afternoon pickup times to extend the prospect's daily selling window. |
-| **10** | **Verified Web Domain** | Agent Reach Tab & Overview | `discoveryData.agentReachDossier.verifiedDomain` | Exa Domain Engine | `proudpoppyclothing.com.au` | Clean canonical domain verified from corporate registrations. |
-| **11** | **AI Shipping Policy Summary** | Agent Reach Tab | `discoveryData.agentReachDossier.logisticsSignals.shippingSummary` | Gemini Flash | 4-point bulleted breakdown of fulfillment, carriers, returns, and opportunity | Replaces walls of raw text with an executive brief scannable in 5 seconds. |
-| **12** | **Raw Source Citations** | Agent Reach Tab (Collapsible) | `discoveryData.agentReachDossier.logisticsSignals.rawSnippets` | Exa Search | Exact quotes from shipping policy & terms pages | Auditable source evidence if reps need to verify exact legal or return terms. |
-| **13** | **Industry Category** | AI Website Scrape Tab & Overview | `discoveryData.industryCategory` | AI Crawler | `Retail & Consumer Goods` | Categorizes the business vertical for targeted sales campaigns. |
-| **14** | **Industry Sub-Category** | AI Website Scrape Tab & Overview | `discoveryData.industrySubCategory` | AI Crawler | `Women's Apparel & Fashion Accessories` | Granular niche classification for precision pitch framing. |
-| **15** | **eCommerce Cart Platform** | AI Website Scrape Tab & Overview | `discoveryData.ecommercePlatform` | AI Crawler / Exa | `Shopify` (or WooCommerce, BigCommerce, Magento) | Informs reps that prospect is plug-and-play compatible with free MailPlus ShipMate app. |
-| **16** | **Accounting Software** | AI Website Scrape Tab & Overview | `discoveryData.xeroDetected` | AI Crawler | `Xero` (or MYOB) | Verifies automated invoicing and paperless billing integration compatibility. |
-| **17** | **Physical Branch Network** | AI Website Scrape Tab | `discoveryData.branches` | AI Crawler | 6 retail stores across VIC, NSW, QLD with street addresses and phone numbers | Identifies multi-location store footprint for potential multi-site pickup agreements. |
-| **18** | **PO Box & Postal Addresses** | AI Website Scrape Tab | `discoveryData.postalAddresses` | AI Crawler | Corporate PO Boxes and Locked Bags | Prime target for MailPlus daily postal collection and GPO lodge runs. |
-| **19** | **Company Description & Products** | AI Website Scrape Tab & Overview | `discoveryData.prospectSummary` | AI Crawler | Summary of products, pricing, and catalog | Provides reps with instant commercial context on what the company sells. |
-| **20** | **Target Audience & Value Prop** | AI Website Scrape Tab | `companyInsights[0].targetAudience` | AI Crawler | Target demographics, size, and brand promise | Helps reps align pitch tone (e.g. boutique, fast-growth, industrial). |
-| **21** | **Fulfillment Model** | AI Website Scrape Tab | `discoveryData.fulfilmentModel` | AI Crawler | `In-house warehouse fulfillment` vs `3PL` | Determines whether sales pitch targets their internal warehouse manager or 3PL coordinator. |
-| **22** | **Sister Companies & Linked Entities**| AI Website Scrape Tab | `discoveryData.linkedEntities` | AI Crawler | Affiliated brand storefronts, subsidiaries, and sister entities | Uncovers multi-brand cross-selling opportunities under the same ownership. |
-| **23** | **LinkedIn Profiles & Titles** | Decision Makers Tab | `discoveryData.decisionMakerCandidates` | LinkedIn Index | Name, exact title, department, location, and URL | Bypasses gatekeepers directly to operational heads. |
-| **24** | **Permanent CRM Contact** | Contacts Tab & Header | `contacts[]` | 1-Click Sync | Synced contact record in lead's contact directory | Saves contact permanently with name, title, email/LinkedIn for dialing and cadence. |
-| **25** | **Social Handles & Followers** | Social & Sentiment Tab | `discoveryData.socialIntelligence` | Social Indexer | Instagram handle, Facebook page, LinkedIn followers | Indicator of online brand popularity, consumer engagement, and parcel order volume. |
-| **26** | **Shipping Sentiment Rating** | Social & Sentiment Tab | `discoveryData.socialIntelligence.shippingSentiment` | Social Monitor | `Negative / Delivery Complaints Detected` | Flags whether current carrier is failing customers. |
+| **1** | **Enriched (AI) Badge** | Hub Header | `discoveryData.lastEnriched` | AI Crawler | `✓ Enriched (AI)` | Visual confirmation that website crawl and industry classification are complete. |
+| **2** | **Agent Reach (Live) Badge** | Hub Header | `discoveryData.agentReachDossier.generatedAt` | Agent Reach | `✓ Agent Reach (Live)` | Visual confirmation that live web logistics and LinkedIn search are active. |
+| **3** | **Primary Decision Maker** | Overview & Decision Makers | `discoveryData.agentReachDossier.decisionMakers[0]` | LinkedIn Index | `Kerrie Nelson — General Manager` | Reps know exactly who runs company operations before dialing. |
+| **4** | **Match Confidence** | Overview & Decision Makers | `candidate.confidence` | LinkedIn Index | `Primary Decision Maker` / `High Match` | Prioritizes operational signatories over administrative staff. |
+| **5** | **LinkedIn Direct URL** | Overview & Decision Makers | `candidate.linkedinUrl` | LinkedIn Index | `linkedin.com/in/...` | 1-click external link to view employment background and mutual connections. |
+| **6** | **Suggested Call Opener** | Synthesized Overview | `discoveryData.agentReachDossier.enrichment.suggestedOpener` | Gemini Synthesis | *"Hi [Name], it's [Rep] with MailPlus. I noticed Proud Poppy dispatches daily..."* | High-credibility conversation hook tailored to shipping setup and store footprint. |
+| **7** | **Suggested Product** | Synthesized Overview | `discoveryData.suggestedProduct` | Gemini Synthesis | `Scheduled Daily Courier Pickup / Shipmate Express Parcels` | The exact MailPlus core service to quote and pitch on the initial call. |
+| **8** | **Suggested Personalisation** | Synthesized Overview | `discoveryData.suggestedPersonalisation` | Gemini Synthesis | Multi-warehouse collection (Epping & Burleigh Heads) + Shopify integration | Eliminates rep hesitation; gives concrete talking points for MailPlus value props. |
+| **9** | **Executive Prospect Summary** | Synthesized Overview | `discoveryData.prospectSummary` | Gemini Flash | Fast-growing women's fashion retailer with 9 sites and dual warehouse hubs | Gives reps commercial context on products, parcel volume, and fulfillment setup. |
+| **10** | **Social Proof Signed Clients** | Synthesized Overview | `similarCustomers` | CRM Matcher | `4 similar signed clients in CRM` | Reps can drop familiar local customer names in the same industry vertical. |
+| **11** | **Detected Parcel Carriers** | Agent Reach & Overview | `discoveryData.agentReachDossier.logisticsSignals.carrierDetected` | Exa Web Discovery | `Australia Post`, `StarTrack`, `Sendle` | Identifies incumbent courier contract to prepare rate and service comparisons. |
+| **12** | **Daily Dispatch Cutoff** | Agent Reach & Overview | `discoveryData.agentReachDossier.logisticsSignals.cutoffTimes` | Exa Web Discovery | `2:00 PM AEST` | Reps pitch later afternoon pickup times to extend the prospect's daily selling window. |
+| **13** | **Verified Web Domain** | Agent Reach & Overview | `discoveryData.agentReachDossier.verifiedDomain` | Exa Domain Engine | `proudpoppyclothing.com.au` | Clean canonical domain verified against corporate business registrations. |
+| **14** | **Verified Parcel Shipper** | AI Scrape & Overview | `discoveryData.parcelShippingStatus` | AI Crawler | `✓ Verified Shipper` | Validates that prospect ships physical parcels and is eligible for courier accounts. |
+| **15** | **AI Shipping Summary** | Agent Reach Tab | `discoveryData.agentReachDossier.logisticsSignals.shippingSummary` | Gemini Flash | 4-point bulleted breakdown of fulfillment, carriers, returns, and sales angle | Replaces walls of raw text with an executive brief scannable in 5 seconds. |
+| **16** | **Raw Source Citations** | Agent Reach (Drawer) | `discoveryData.agentReachDossier.logisticsSignals.rawSnippets` | Exa Search | Exact quotes from shipping policy & terms pages | Auditable source evidence if reps need to verify exact legal or return terms. |
+| **17** | **Industry Category** | AI Scrape & Overview | `discoveryData.industryCategory` | AI Crawler | `RETAIL - CLOTHING FASHION` | Categorizes the business vertical for targeted sales campaigns and reporting. |
+| **18** | **Industry Sub-Category** | AI Scrape & Overview | `discoveryData.industrySubCategory` | AI Crawler | `Women's Fashion Clothing & Accessories Retailer (Sizes 6-30)` | Granular niche classification for precision pitch framing. |
+| **19** | **eCommerce Cart Platform** | AI Scrape & Overview | `discoveryData.ecommercePlatform` | AI Crawler / Exa | `Shopify` (or WooCommerce, BigCommerce, Magento) | Informs reps that prospect is plug-and-play compatible with free MailPlus ShipMate app. |
+| **20** | **Xero Accounting Detected** | AI Scrape & Overview | `discoveryData.xeroDetected` | AI Crawler | `No` / `Yes` | Verifies automated paperless billing and electronic invoicing compatibility. |
+| **21** | **Australia Post (AP) Signal**| AI Website Scrape Tab | `discoveryData.apRelationshipSignal` | AI Crawler | Uses various delivery services; prepaid postal return labels | Arms reps with intelligence on the prospect's current postal dependence. |
+| **22** | **Physical Branch Network** | AI Scrape & Footprint | `discoveryData.branches` | AI Crawler | 9 locations across NSW, QLD, and VIC with addresses and store types | Identifies warehouse distribution centers vs retail stores for multi-site collection. |
+| **23** | **PO Box & Postal Addresses** | AI Website Scrape Tab | `discoveryData.postalAddresses` | AI Crawler | Corporate PO Boxes and Locked Bags | Prime target for MailPlus daily postal collection and GPO lodge runs. |
+| **24** | **Permanent CRM Contact** | Contacts Tab & Header | `contacts[]` | 1-Click Sync | Synced contact record in lead's directory | Saves contact permanently with name, title, email/LinkedIn for dialing and cadence. |
+| **25** | **Social Handles & Followers** | Social & Sentiment Tab | `discoveryData.socialIntelligence` | Social Indexer | `@proudpoppyclothing` on Instagram, Facebook followers | Indicator of online brand popularity, consumer engagement, and parcel order volume. |
+| **26** | **Shipping Sentiment Rating** | Social & Sentiment Tab | `discoveryData.socialIntelligence.shippingSentiment` | Social Monitor | `Negative / Delivery Complaints Detected` | Flags whether current carrier is failing customers with late or lost parcels. |
 | **27** | **Competitor Delivery Complaints** | Social & Sentiment Tab | `discoveryData.socialIntelligence.deliveryComplaints` | Social Monitor | Customer reviews citing parcel delivery delays or lost boxes with competitor couriers | Reps position MailPlus guaranteed daily driver care as direct solution to customer churn. |
 
 ---
@@ -127,10 +174,10 @@ Finding the right operational person is the single highest-value step in outboun
 graph LR
     A[Company Domain & Name] --> B[LinkedIn Agent Reach Indexer]
     B --> C[Filters: Logistics, Warehouse, Operations, MD]
-    C --> D[Confidence Scoring: High Match]
+    C --> D[Confidence Scoring: Primary Decision Maker]
     D --> E[Interactive Card Grid]
-    E --> F[1-Click: Add to Contacts]
-    F --> G[Saved to Lead Contacts Tab in CRM]
+    E --> F[1-Click: + Add to Contacts]
+    F --> G[Permanent Lead Contact Record in CRM]
 ```
 
 ### 1. How It Works
@@ -140,20 +187,20 @@ graph LR
   - **Executive Operations:** Operations Directors, General Managers, Managing Directors, Founders.
 - Extracted details include **Full Name**, **Current Title**, **Department Tag** (e.g. *Operations & Management*), and **Location** (e.g. *Melbourne, Australia*).
 
-### 2. Match Confidence (`High Match` Badge)
-- The algorithm scores each profile. Operational roles that control shipping budgets and carrier selection receive a **`High Match`** badge.
+### 2. Match Confidence (`Primary Decision Maker` / `High Match`)
+- The algorithm scores each profile. Operational roles that control shipping budgets and carrier selection receive a **`Primary Decision Maker`** or **`High Match`** badge.
 - This ensures reps do not waste time calling general office administrators or non-operational staff.
 
 ### 3. Direct Profile Verification
-- Every card includes a direct external link icon `[↗]`. Reps can click to view the live LinkedIn profile in a new tab to see background, mutual connections, or recent activity.
+- Every card includes a direct external link icon `[LinkedIn ↗]`. Reps can click to view the live LinkedIn profile in a new tab to see background, mutual connections, or recent company milestones.
 
-### 4. 1-Click CRM Contact Creation
-- Reps click **`+ Add to Contacts`** on any candidate card.
+### 4. 1-Click Permanent CRM Contact Creation
+- Reps click **`+ Add to Contacts`** (styled in high-contrast dark teal `#095c7b` with white text).
 - The system automatically creates a permanent contact entry in the lead's **"Contacts"** tab with name, job title, and linked profile.
 - The button smoothly transforms into a green **`[✓ In Contacts]`** status badge to prevent duplicate additions.
 
 ### 5. On-Demand Re-Scanning
-- If a company recently restructured or appointed a new supply chain head, reps can click **`Re-scan LinkedIn`** inside the Decision Makers tab to refresh results immediately.
+- If a company recently restructured or appointed a new supply chain head, reps can click **`Re-scan LinkedIn`** inside the Decision Makers view to refresh results immediately.
 
 ---
 
@@ -162,8 +209,8 @@ graph LR
 The **Social & Sentiment** view provides reps with an intelligence wedge against competitor carriers:
 
 ### 1. Brand Footprint & Volume Sizing
-- Detects the prospect's **Instagram**, **Facebook**, and **LinkedIn** company pages along with their follower counts.
-- **Why It Matters:** A fashion or consumer brand with 50,000+ Instagram followers is virtually guaranteed to dispatch hundreds of parcels weekly, indicating high revenue potential for MailPlus satchels.
+- Detects the prospect's **Instagram**, **Facebook**, and **LinkedIn** company pages along with their follower counts (e.g., `@proudpoppyclothing`).
+- **Why It Matters:** An online apparel or lifestyle brand with tens of thousands of followers is virtually guaranteed to dispatch hundreds of parcels weekly, indicating high revenue potential for MailPlus satchels.
 
 ### 2. Delivery Sentiment Rating
 - The system scans recent public consumer feedback, reviews, and comments relating to parcel delivery, classifying sentiment as:
@@ -174,24 +221,24 @@ The **Social & Sentiment** view provides reps with an intelligence wedge against
 ### 3. Surfacing Competitor Courier Failures
 - The engine specifically flags mentions of **lost parcels**, **extended delivery delays**, **damaged boxes**, or **unresponsive customer support** associated with Australia Post, StarTrack, Aramex, or Sendle.
 - **How Reps Pitch This:**
-  > *"Kerrie, I noticed on your public channels that your team has had to deal with several customer complaints recently regarding delayed Australia Post deliveries during peak promotions. With MailPlus, your parcels are handed directly to your dedicated local franchise driver every afternoon, backed by our direct phone support so your team never has to wait on courier call-center hold lines again."*
+  > *"Kerrie, I noticed on your public channels that your team has had to deal with customer complaints regarding delayed courier deliveries during peak promotions. With MailPlus, your parcels are handed directly to your dedicated local franchise driver every afternoon, backed by our direct phone support so your team never has to wait on courier call-center hold lines again."*
 
 ---
 
 ## 6. How Leads Can Be Enriched (3 Operating Workflows)
 
 ### Method 1: 1-Click from the Lead Profile
-- Open any lead record -> Go to **Discovery** tab -> Click **`[✨] Run Complete Intel (AI + Agent Reach)`**.
+- Open any lead record -> Go to **Discovery** tab -> Click **`[✨ Run Complete Intel (AI + Agent Reach)]`**.
 - Simultaneously executes website crawling and live web/LinkedIn indexing in 5–8 seconds.
 
-### Method 2: Batch Enrichment from Outbound Leads Table
+### Method 2: Targeted Decision Maker Discovery Modal
+- Click **`[👥 Decision Makers (6)]`** in the Hub header.
+- Opens the dedicated modal to discover, review, and add key managers directly into contacts without leaving the current screen.
+
+### Method 3: Batch Enrichment from Outbound Leads Table
 - Go to the main **Outbound Leads Table** (`/leads`).
 - Check multiple leads (or select an entire filtered segment) -> Click **"Enrich with AI"** in the action bar.
 - Runs asynchronous batch crawling and Agent Reach indexing across all selected prospects.
-
-### Method 3: Targeted Decision Maker Discovery Modal
-- Click **`[👥] Decision Makers ({count})`** in the Hub header.
-- Opens the dedicated modal to discover, review, and add key managers directly into contacts without leaving the current screen.
 
 ---
 
@@ -204,10 +251,10 @@ The **Social & Sentiment** view provides reps with an intelligence wedge against
 [ Step 2: Check Detected Carriers & Cutoff ] ──> Know who they ship with & when orders close
             │
             ▼
-[ Step 3: Identify Top Decision Maker ] ───────> Know who to ask for (Click "+ Add to Contacts")
+[ Step 3: Identify Primary Decision Maker ] ────> Know who to ask for (Click "+ Add to Contacts")
             │
             ▼
-[ Step 4: Scan AI Shipping Summary ] ──────────> Note warehouse locations, return terms, volume
+[ Step 4: Scan Executive Prospect Summary ] ───> Note warehouses (e.g. Epping & Burleigh Heads)
             │
             ▼
 [ Step 5: Read Suggested Opener & Dial ] ──────> Deliver a warm, confident, customized pitch
