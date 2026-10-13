@@ -4,6 +4,10 @@ import { industryCategories } from '@/lib/constants';
 import { findSimilarSignedCustomers } from '@/services/similar-customers';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { fetchWithJinaReader } from '@/services/agent-reach/runner';
+import { searchCompanyWebsite, searchLogisticsEvidence } from '@/services/agent-reach/exa-discovery';
+import { generateLeadDossier } from '@/services/agent-reach/lead-dossier';
+import type { AgentReachDossier } from '@/lib/types';
 
 const PostalAddressSchema = z.object({
   locationName: z.string().optional().describe(`Name or label of the postal address (e.g. 'Southern Highlands PO Box', 'Sydney GPO Box', 'Regional Postal Address').`),
@@ -282,13 +286,19 @@ async function crawlLeadWebsite(baseUrl: string): Promise<{ text: string; detect
     }
     homeResult.discoveredLinks.forEach(l => allDiscoveredLinks.add(l));
   } else {
-    // If homepage fails or is dead, immediately probe metadata and return early (avoid 20s of wasted requests)
-    const probed = await probePlatformMetadata(cleanBase);
-    return {
-      text: '',
-      detectedPlatform: probed,
-      discoveredLinks: [],
-    };
+    // Attempt fallback with Jina Reader via Agent Reach (handles SPAs, JS rendering, and anti-bot)
+    const jinaText = await fetchWithJinaReader(cleanBase, 8000);
+    if (jinaText && jinaText.length > 50) {
+      aggregatedText += `\n--- PAGE: HOMEPAGE (Jina Reader) ---\n` + jinaText.substring(0, 15000);
+    } else {
+      // If both homepage and Jina fail, immediately probe metadata and return early (avoid 20s of wasted requests)
+      const probed = await probePlatformMetadata(cleanBase);
+      return {
+        text: '',
+        detectedPlatform: probed,
+        discoveredLinks: [],
+      };
+    }
   }
 
   // STAGE 2: Identify Confirmed Internal Links Present in Homepage HTML
@@ -499,13 +509,39 @@ export const enrichLeadFlow = ai.defineFlow(
     let siteText = '';
     let autoDetectedPlatform = 'No';
     let discoveredLinksList: string[] = [];
+    let targetWebsite = input.websiteUrl?.trim() || '';
 
-    // 1. If website URL is available, crawl it
-    if (input.websiteUrl && input.websiteUrl.trim() !== '') {
-      const crawlRes = await crawlLeadWebsite(input.websiteUrl);
+    // 1. If website URL is missing, discover it via Exa semantic search
+    if (!targetWebsite) {
+      try {
+        const found = await searchCompanyWebsite(input.companyName, input.suburb, input.state);
+        if (found.url) {
+          targetWebsite = found.url;
+        }
+      } catch (err) {
+        console.warn('[EnrichLeadFlow] Exa website discovery skipped:', err);
+      }
+    }
+
+    // 2. If website URL is available (or newly discovered), crawl it
+    if (targetWebsite) {
+      const crawlRes = await crawlLeadWebsite(targetWebsite);
       siteText = crawlRes.text;
       autoDetectedPlatform = crawlRes.detectedPlatform;
       discoveredLinksList = crawlRes.discoveredLinks;
+    }
+
+    // 3. Augment with live logistics evidence from Exa
+    try {
+      const logisticsEvidence = await searchLogisticsEvidence(input.companyName, targetWebsite);
+      if (logisticsEvidence.rawSnippets.length > 0) {
+        siteText += `\n--- VERIFIED LOGISTICS & CARRIER EVIDENCE (Exa Live Search) ---\n` +
+          logisticsEvidence.rawSnippets.join('\n') +
+          (logisticsEvidence.carrierDetected.length > 0 ? `\nDetected Carriers Online: ${logisticsEvidence.carrierDetected.join(', ')}` : '') +
+          (logisticsEvidence.cutoffTimes ? `\nCutoff Times: ${logisticsEvidence.cutoffTimes}` : '');
+      }
+    } catch (err) {
+      console.warn('[EnrichLeadFlow] Exa logistics search skipped:', err);
     }
 
     // 2. Initial lookup of similar signed customers only if industry is already provided
@@ -608,20 +644,41 @@ export async function enrichLeadAction(
     const industryCategory = leadData.industryCategory || '';
     const industrySubCategory = leadData.industrySubCategory || '';
 
-    // Run AI Flow
-    const enrichment = await enrichLeadFlow({
-      leadId,
-      companyName,
-      websiteUrl,
-      address,
-      suburb,
-      state,
-      postcode,
-      initialNotes,
-      franchiseeName,
-      industryCategory,
-      industrySubCategory,
-    });
+    // Run AI Website Crawl & Agent Reach Live Intelligence concurrently
+    const [enrichmentResult, agentReachResult] = await Promise.allSettled([
+      enrichLeadFlow({
+        leadId,
+        companyName,
+        websiteUrl,
+        address,
+        suburb,
+        state,
+        postcode,
+        initialNotes,
+        franchiseeName,
+        industryCategory,
+        industrySubCategory,
+      }),
+      generateLeadDossier({
+        leadId,
+        companyName,
+        websiteUrl,
+        suburb,
+        state,
+      }),
+    ]);
+
+    if (enrichmentResult.status === 'rejected') {
+      throw enrichmentResult.reason;
+    }
+    const enrichment = enrichmentResult.value;
+
+    let agentReachDossier: AgentReachDossier | null = null;
+    if (agentReachResult.status === 'fulfilled') {
+      agentReachDossier = agentReachResult.value;
+    } else {
+      console.warn(`[Agent Reach] Non-blocking dossier warning for lead ${leadId}:`, agentReachResult.reason);
+    }
 
     // Clean and segregate physical branches and PO Boxes
     const isPoBoxStr = (s?: string) => /(?:p\.?o\.?\s*box|gpo\s*box|locked\s*bag|private\s*bag|post\s*office\s*box)/i.test(s || '');
@@ -659,6 +716,18 @@ export async function enrichLeadAction(
       }
     }
 
+    // Prepare separate discoveryData payload for Agent Reach
+    const existingDiscovery = leadData.discoveryData || {};
+    const updatedDiscovery: Record<string, any> = {
+      ...existingDiscovery,
+    };
+
+    if (agentReachDossier) {
+      updatedDiscovery.agentReachDossier = agentReachDossier;
+      updatedDiscovery.decisionMakerCandidates = agentReachDossier.decisionMakers || [];
+      updatedDiscovery.socialIntelligence = agentReachDossier.socialIntelligence || {};
+    }
+
     // Save enriched fields directly to Firestore
     const updatePayload: Record<string, any> = {
       industryCategory: enrichment.industryCategory,
@@ -686,10 +755,33 @@ export async function enrichLeadAction(
       isAiEnriched: true,
       enrichedAt: new Date().toISOString(),
       enrichedBy: options?.requestorName || 'AI Lead Intelligence Agent',
+      discoveryData: updatedDiscovery,
+      agentReachDossier: agentReachDossier || null,
+      decisionMakerCandidates: agentReachDossier?.decisionMakers || [],
+      socialIntelligence: agentReachDossier?.socialIntelligence || null,
     };
 
     if (enrichment.hasParcelShipping !== undefined) {
       updatePayload.hasParcelShipping = enrichment.hasParcelShipping;
+    }
+
+    // If websiteUrl was missing on lead and Agent Reach discovered it, save it
+    if ((!websiteUrl || websiteUrl.trim() === '') && agentReachDossier?.officialWebsite) {
+      updatePayload.websiteUrl = agentReachDossier.officialWebsite;
+    }
+
+    // If decisionMakerName is not set, populate from top candidate found on LinkedIn
+    if (!leadData.decisionMakerName && agentReachDossier?.decisionMakers && agentReachDossier.decisionMakers.length > 0) {
+      updatePayload.decisionMakerName = agentReachDossier.decisionMakers[0].name;
+      updatePayload.decisionMakerTitle = agentReachDossier.decisionMakers[0].title;
+    }
+
+    // If live web signals detected parcel carriers and apRelationship is empty, record it
+    if (agentReachDossier?.logisticsSignals?.carrierDetected && agentReachDossier.logisticsSignals.carrierDetected.length > 0) {
+      const carriersStr = agentReachDossier.logisticsSignals.carrierDetected.join(', ');
+      if (!apRelationship || apRelationship === 'Not Detected') {
+        updatePayload.apRelationship = `Carriers detected online: ${carriersStr}`;
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -701,9 +793,12 @@ export async function enrichLeadAction(
     // Create an Activity record under leads/{leadId}/activity so anyone viewing the lead knows when and who enriched it
     try {
       const enrichedByName = options?.requestorName || 'AI Lead Intelligence Agent';
+      const reachSummary = agentReachDossier?.decisionMakers?.length
+        ? ` Discovered ${agentReachDossier.decisionMakers.length} decision maker(s) on LinkedIn and live logistics signals via Agent Reach.`
+        : '';
       const activityData: Record<string, any> = {
         type: 'AI Enrichment',
-        notes: `Lead was enriched with AI intelligence by ${enrichedByName}. eCommerce platform, shipping analysis, and branch locations updated.`,
+        notes: `Lead was enriched with AI intelligence & Agent Reach live web signals by ${enrichedByName}. eCommerce platform, shipping analysis, branches, and decision makers updated.${reachSummary}`,
         author: enrichedByName,
         date: nowIso,
         syncedWithNetSuite: false,
@@ -722,6 +817,8 @@ export async function enrichLeadAction(
         ...enrichment,
         leadId,
         companyName,
+        agentReachDossier,
+        discoveryData: updatedDiscovery,
       },
     };
   } catch (error: any) {

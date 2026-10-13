@@ -30,6 +30,7 @@ import {
   Cloud,
   Check,
   Minimize2,
+  Truck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Lead } from '@/lib/types';
@@ -43,6 +44,8 @@ export interface EnrichedLeadResult {
   totalBranchCount?: number;
   hasPoBox?: boolean;
   industryCategory?: string;
+  decisionMakersCount?: number;
+  carriersDetected?: string[];
   error?: string;
 }
 
@@ -315,7 +318,7 @@ export function BatchEnrichmentDialog({
                   </Badge>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-                  Automated eCommerce platform detection, Australian multi-branch extraction, PO Box isolation, and cold-call intelligence.
+                  Automated eCommerce platform detection, live Agent Reach carrier &amp; LinkedIn decision makers discovery, PO Box isolation, and cold-call intelligence.
                 </DialogDescription>
               </div>
             </div>
@@ -449,6 +452,18 @@ export function BatchEnrichmentDialog({
                               <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1 rounded font-medium">
                                 <Mail className="w-2.5 h-2.5" />
                                 PO Box
+                              </span>
+                            )}
+                            {item.decisionMakersCount !== undefined && item.decisionMakersCount > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-1 rounded font-medium">
+                                <Users className="w-2.5 h-2.5" />
+                                {item.decisionMakersCount} Contact{item.decisionMakersCount > 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {item.carriersDetected && item.carriersDetected.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-1 rounded font-medium">
+                                <Truck className="w-2.5 h-2.5" />
+                                {item.carriersDetected.join(', ')}
                               </span>
                             )}
                             {item.industryCategory && (

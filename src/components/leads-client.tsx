@@ -34,7 +34,7 @@ import { BatchEnrichmentDialog } from '@/components/leads/batch-enrichment-dialo
 import { AdminEnrichmentBatchesDialog } from '@/components/leads/admin-enrichment-batches-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck, Zap, CheckCircle2, Maximize2 } from 'lucide-react'
+import { MoreHorizontal, UserX, UserCheck, MapPin, SlidersHorizontal, X, PhoneCall, UserPlus, Users, Filter, UserCog, Download, ArrowUpDown, History, PlayCircle, RefreshCw, XCircle, Trash2, Move, Calendar as CalendarIcon, AlertTriangle, GitMerge, Mail, Send, Loader2, ListFilter, PlusCircle, Check, ChevronsUpDown, Sparkles, ShieldCheck, Zap, CheckCircle2, Maximize2, Truck } from 'lucide-react'
 import { EmailVerificationBadge } from '@/components/ui/email-verification-badge'
 import { verifyEmailsClient } from '@/lib/verify-email-client'
 import { EmailVerificationResult } from '@/lib/types'
@@ -1576,6 +1576,78 @@ export default function LeadsClientPage({
     setIsEnrichmentReviewOpen(true);
   };
 
+  const handleSingleLeadEnrich = (lead: Lead) => {
+    setSelectedLeads([lead.id]);
+    setBatchEnrichTargetIds([lead.id]);
+    setEnrichedLeadsToAssign([lead]);
+    setIsEnrichmentReviewOpen(true);
+  };
+
+  const renderAiEnrichmentCell = (lead: Lead) => {
+    if (lead.isAiEnriched) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit font-medium cursor-help">
+                <Sparkles className="w-3 h-3 text-emerald-600" />
+                Enriched
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs max-w-xs space-y-1.5 p-3">
+              <div className="flex items-center gap-1.5 font-bold text-slate-900 border-b border-slate-100 pb-1">
+                <Sparkles className="w-3.5 h-3.5 text-[#095c7b]" />
+                <span>AI &amp; Agent Reach Enriched</span>
+              </div>
+              {lead.enrichedBy && <p className="text-slate-600 text-[11px]">By: {lead.enrichedBy}</p>}
+              {lead.enrichedAt && <p className="text-slate-500 text-[11px]">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
+              {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
+              {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
+              {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
+              {(lead.decisionMakerName || lead.agentReachDossier?.decisionMakers?.[0]?.name) && (
+                <p className="text-sky-700 font-medium flex items-center gap-1">
+                  <Users className="w-3 h-3 text-sky-600 shrink-0" />
+                  <span>Contact: {lead.decisionMakerName || lead.agentReachDossier?.decisionMakers?.[0]?.name} {lead.decisionMakerTitle ? `(${lead.decisionMakerTitle})` : ''}</span>
+                </p>
+              )}
+              {(lead.agentReachDossier?.logisticsSignals?.carrierDetected && lead.agentReachDossier.logisticsSignals.carrierDetected.length > 0) && (
+                <p className="text-emerald-700 font-medium flex items-center gap-1">
+                  <Truck className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span>Carriers: {lead.agentReachDossier.logisticsSignals.carrierDetected.join(', ')}</span>
+                </p>
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSingleLeadEnrich(lead);
+              }}
+              className="group inline-flex items-center text-left"
+            >
+              <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-200 group-hover:border-[#095c7b]/40 group-hover:bg-[#095c7b]/10 group-hover:text-[#095c7b] flex items-center gap-1 w-fit text-xs transition-colors cursor-pointer">
+                <Sparkles className="w-3 h-3 text-slate-400 group-hover:text-[#095c7b]" />
+                Not Enriched
+              </Badge>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="text-xs">
+            Click to enrich with AI Crawl &amp; Agent Reach Deep Intelligence
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
   const handleConfirmAndStartEnrichment = async (
     reassignments: Array<{ leadId: string; targetDialer: string }> | null
   ) => {
@@ -1623,10 +1695,10 @@ export default function LeadsClientPage({
         setSelectedLeads([]);
         setIsJobBannerDismissed(false);
         toast({
-          title: "AI Enrichment Running in Cloud",
+          title: "AI & Agent Reach Enrichment Running in Cloud",
           description: reassignments && reassignments.length > 0
-            ? `Processing ${batchEnrichTargetIds.length} lead(s). Dialers will be automatically assigned upon successful enrichment.`
-            : `Processing ${batchEnrichTargetIds.length} lead(s). Safe to close browser or log out anytime!`,
+            ? `Processing ${batchEnrichTargetIds.length} lead(s) with AI crawl, carrier detection, & LinkedIn decision makers. Dialers will be automatically assigned upon successful enrichment.`
+            : `Processing ${batchEnrichTargetIds.length} lead(s) with AI & Agent Reach. Safe to close browser or log out anytime!`,
         });
       } else {
         throw new Error(data.error || 'Failed to start cloud enrichment job');
@@ -2824,30 +2896,7 @@ export default function LeadsClientPage({
                                                 )}
                                             </TableCell>
                                             <TableCell className="hidden md:table-cell px-2 md:px-4">
-                                                {lead.isAiEnriched ? (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit font-medium cursor-help">
-                                                                    <Sparkles className="w-3 h-3 text-emerald-600" />
-                                                                    Enriched
-                                                                </Badge>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent className="text-xs max-w-xs space-y-1">
-                                                                <p className="font-semibold text-slate-900">AI Enriched</p>
-                                                                {lead.enrichedBy && <p className="text-slate-600">By: {lead.enrichedBy}</p>}
-                                                                {lead.enrichedAt && <p className="text-slate-500">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
-                                                                {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
-                                                                {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
-                                                                {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                ) : (
-                                                    <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1 w-fit text-xs">
-                                                        Not Enriched
-                                                    </Badge>
-                                                )}
+                                                {renderAiEnrichmentCell(lead)}
                                             </TableCell>
                                             <TableCell className="text-right px-2 md:px-4">
                                                 <div className="hidden md:inline-flex">
@@ -3067,30 +3116,7 @@ export default function LeadsClientPage({
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="hidden md:table-cell px-2 md:px-4">
-                                                        {lead.isAiEnriched ? (
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit font-medium cursor-help">
-                                                                            <Sparkles className="w-3 h-3 text-emerald-600" />
-                                                                            Enriched
-                                                                        </Badge>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent className="text-xs max-w-xs space-y-1">
-                                                                        <p className="font-semibold text-slate-900">AI Enriched</p>
-                                                                        {lead.enrichedBy && <p className="text-slate-600">By: {lead.enrichedBy}</p>}
-                                                                        {lead.enrichedAt && <p className="text-slate-500">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
-                                                                        {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
-                                                                        {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
-                                                                        {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        ) : (
-                                                            <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1 w-fit text-xs">
-                                                                Not Enriched
-                                                            </Badge>
-                                                        )}
+                                                        {renderAiEnrichmentCell(lead)}
                                                     </TableCell>
                                                     <TableCell className="text-right px-2 md:px-4">
                                                          <div className="hidden md:inline-flex">
@@ -3098,6 +3124,7 @@ export default function LeadsClientPage({
                                                              <DropdownMenu>
                                                                  <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                                  <DropdownMenuContent>
+                                                                     <DropdownMenuItem onClick={() => handleSingleLeadEnrich(lead)} className="text-[#095c7b] focus:text-[#095c7b] font-medium"><Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />Enrich with AI</DropdownMenuItem>
                                                                      {userProfile?.activeRole !== 'Outbound Admin' && (
                                                                        <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
                                                                      )}
@@ -3109,6 +3136,7 @@ export default function LeadsClientPage({
                                                              <DropdownMenu>
                                                                  <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
                                                                  <DropdownMenuContent>
+                                                                     <DropdownMenuItem onClick={() => handleSingleLeadEnrich(lead)} className="text-[#095c7b] focus:text-[#095c7b] font-medium"><Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />Enrich with AI</DropdownMenuItem>
                                                                      <DropdownMenuItem onClick={() => toggleLeadDetails(lead.id)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
                                                                      {userProfile?.activeRole !== 'Outbound Admin' && (
                                                                        <DropdownMenuItem onClick={() => handleUnassign(lead.id)}><UserX className="mr-2 h-4 w-4" />Unassign</DropdownMenuItem>
@@ -3305,30 +3333,7 @@ export default function LeadsClientPage({
                                                 )}
                                             </TableCell>
                                             <TableCell className="hidden md:table-cell px-2 md:px-4">
-                                                {lead.isAiEnriched ? (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 w-fit font-medium cursor-help">
-                                                                    <Sparkles className="w-3 h-3 text-emerald-600" />
-                                                                    Enriched
-                                                                </Badge>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent className="text-xs max-w-xs space-y-1">
-                                                                <p className="font-semibold text-slate-900">AI Enriched</p>
-                                                                {lead.enrichedBy && <p className="text-slate-600">By: {lead.enrichedBy}</p>}
-                                                                {lead.enrichedAt && <p className="text-slate-500">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
-                                                                {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
-                                                                {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
-                                                                {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                ) : (
-                                                    <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1 w-fit text-xs">
-                                                        Not Enriched
-                                                    </Badge>
-                                                )}
+                                                {renderAiEnrichmentCell(lead)}
                                             </TableCell>
                                             <TableCell className="text-right px-2 md:px-4">
                                                 <DropdownMenu>
@@ -3338,6 +3343,13 @@ export default function LeadsClientPage({
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent>
+                                                        <DropdownMenuItem
+                                                            onClick={() => handleSingleLeadEnrich(lead)}
+                                                            className="text-[#095c7b] focus:text-[#095c7b] font-medium"
+                                                        >
+                                                            <Sparkles className="mr-2 h-4 w-4 text-[#095c7b]" />
+                                                            Enrich with AI
+                                                        </DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => handleAssign(lead.id)}>
                                                             <UserPlus className="mr-2 h-4 w-4" />
                                                             Assign to Me

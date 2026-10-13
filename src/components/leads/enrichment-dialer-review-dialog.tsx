@@ -21,6 +21,8 @@ import {
   Layers,
   ArrowRight,
   ShieldCheck,
+  Truck,
+  Globe,
 } from 'lucide-react';
 import type { Lead, UserProfile } from '@/lib/types';
 
@@ -148,7 +150,7 @@ export function EnrichmentDialerReviewDialog({
                   <Sparkles className="h-5 w-5 text-teal-300" />
                 </div>
                 <DialogTitle className="text-xl font-bold text-white tracking-tight">
-                  Step 1: Dialer Assignment Setup &amp; AI Enrichment
+                  Step 1: Dialer Assignment Setup &amp; AI + Agent Reach Enrichment
                 </DialogTitle>
               </div>
               <Badge className="bg-emerald-500/20 text-emerald-200 border-emerald-400/30 px-3 py-1 text-xs font-semibold backdrop-blur-sm">
@@ -157,8 +159,19 @@ export function EnrichmentDialerReviewDialog({
               </Badge>
             </div>
             <DialogDescription className="text-white/80 text-sm leading-relaxed">
-              Choose one or more active Inside Dialers to allocate leads to. Leads will be enriched with AI first, and automatically assigned to your selected dialer(s) upon successful enrichment.
+              Choose one or more active Inside Dialers to allocate leads to. Leads will be enriched with AI Website Crawl &amp; Agent Reach Live Intelligence (carrier detection, LinkedIn decision makers, social footprint), and automatically assigned to your selected dialer(s) upon successful enrichment.
             </DialogDescription>
+            <div className="flex items-center gap-2 pt-1 flex-wrap text-xs text-white/90">
+              <span className="inline-flex items-center gap-1 bg-white/10 px-2.5 py-0.5 rounded-full border border-white/15">
+                <Globe className="w-3 h-3 text-teal-300" /> AI Web Crawl
+              </span>
+              <span className="inline-flex items-center gap-1 bg-white/10 px-2.5 py-0.5 rounded-full border border-white/15">
+                <Truck className="w-3 h-3 text-emerald-300" /> Agent Reach Carriers &amp; Logistics
+              </span>
+              <span className="inline-flex items-center gap-1 bg-white/10 px-2.5 py-0.5 rounded-full border border-white/15">
+                <Users className="w-3 h-3 text-sky-300" /> LinkedIn Decision Makers
+              </span>
+            </div>
           </DialogHeader>
         </div>
 

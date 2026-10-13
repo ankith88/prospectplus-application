@@ -232,6 +232,7 @@ export interface Contact {
   createPasswordEmailSent?: boolean;
   shipmateStatus?: 'Activated' | 'Password Sent' | 'No Access';
   shipmateCheckedAt?: string;
+  linkedinUrl?: string;
 }
 
 export interface Address {
@@ -329,9 +330,67 @@ export interface DiscoveryData {
   linkedEcommerceEntities?: LinkedEcommerceEntity[];
   mainEntityRole?: string;
   fulfilmentModel?: string;
+  agentReachDossier?: AgentReachDossier;
+  decisionMakerCandidates?: DecisionMakerCandidate[];
+  socialIntelligence?: SocialIntelligence;
   isAiEnriched?: boolean;
   enrichedAt?: string;
   enrichedBy?: string;
+}
+
+export interface DecisionMakerCandidate {
+  name: string;
+  title: string;
+  department?: string;
+  linkedinUrl?: string;
+  snippet?: string;
+  confidence?: 'High' | 'Medium' | 'Low';
+  source?: string;
+  location?: string;
+}
+
+export interface SocialIntelligence {
+  instagramHandle?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
+  facebookPageUrl?: string;
+  linkedinCompanyUrl?: string;
+  followersCount?: string;
+  recentActivitySummary?: string;
+  recentPostsCount?: number | string;
+  shippingSentiment?: 'Positive' | 'Neutral' | 'Negative / Delivery Complaints Detected';
+  deliveryComplaints?: string[];
+  deliveryDelayComplaintsDetected?: boolean;
+  summary?: string;
+  scannedAt?: string;
+}
+
+export interface AgentReachEnrichment {
+  industryCategory?: string;
+  industrySubCategory?: string;
+  ecommercePlatform?: string;
+  hasParcelShipping?: boolean;
+  logisticsSummary?: string;
+  suggestedOpener?: string;
+  talkingPoints?: string[];
+}
+
+export interface AgentReachDossier {
+  generatedAt: string;
+  officialWebsite?: string;
+  verifiedDomain?: string;
+  decisionMakers: DecisionMakerCandidate[];
+  socialIntelligence?: SocialIntelligence;
+  logisticsSignals?: {
+    carrierDetected?: string[];
+    dispatchLocations?: string[];
+    cutoffTimes?: string;
+    shippingPoliciesFound?: string[];
+    rawSnippets?: string[];
+    shippingSummary?: string;
+  };
+  enrichment?: AgentReachEnrichment;
+  summary: string;
 }
 
 export interface LinkedEcommerceEntity {
@@ -863,6 +922,11 @@ export interface Lead {
   isAiEnriched?: boolean;
   enrichedAt?: string;
   enrichedBy?: string;
+  decisionMakerName?: string;
+  decisionMakerTitle?: string;
+  agentReachDossier?: AgentReachDossier;
+  decisionMakerCandidates?: DecisionMakerCandidate[];
+  socialIntelligence?: SocialIntelligence;
   pricing_table?: PricingTableRow[];
   suburb_mapping?: LeadSuburbMapping[];
   quoteSentAt?: string;

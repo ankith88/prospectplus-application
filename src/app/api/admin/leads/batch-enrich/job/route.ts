@@ -195,6 +195,14 @@ async function sendJobCompletionNotifications(jobId: string, db: FirebaseFiresto
                     <span style="display: inline-block; width: 8px; height: 8px; background-color: #095c7b; border-radius: 50%;"></span>
                   </td>
                   <td style="font-size: 14px; color: #4a5568; padding-bottom: 8px;">
+                    <strong>Agent Reach Deep Intelligence:</strong> Discovered LinkedIn decision makers and live parcel carrier dispatch signals.
+                  </td>
+                </tr>
+                <tr>
+                  <td width="32" valign="top" style="padding-top: 2px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background-color: #095c7b; border-radius: 50%;"></span>
+                  </td>
+                  <td style="font-size: 14px; color: #4a5568; padding-bottom: 8px;">
                     <strong>Dialer Queues Updated Post-Enrichment:</strong> Enriched leads were automatically assigned to your selected dialers upon successful enrichment.
                   </td>
                 </tr>
@@ -375,6 +383,8 @@ async function startJobWorker(jobId: string) {
               hasPoBox: Boolean(res.data?.hasPoBox),
               industryCategory: res.data?.industryCategory || '',
               assignedTo: targetDialer || null,
+              decisionMakersCount: res.data?.agentReachDossier?.decisionMakers?.length || 0,
+              carriersDetected: res.data?.agentReachDossier?.logisticsSignals?.carrierDetected || [],
             };
           } else {
             // Enrichment failed or was skipped - DO NOT reassign dialer!
