@@ -11,7 +11,12 @@ export async function POST(request: Request) {
     const origin = request.headers.get('origin') || request.headers.get('referer') || 'https://prospect.mailplus.com.au';
     const baseUrl = origin.replace(/\/$/, '');
 
-    if (type === 'franchisee_cancellation_outcome' || type === 'cancellation_outcome_franchisee') {
+    if (
+      type === 'franchisee_cancellation_outcome' ||
+      type === 'cancellation_outcome_franchisee' ||
+      type === 'service_change_outcome' ||
+      type === 'cs_request_outcome'
+    ) {
       const res = await sendFranchiseeCancellationOutcomeEmail({
         ...(payload || {}),
         baseUrl,

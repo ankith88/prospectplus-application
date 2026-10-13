@@ -45,7 +45,8 @@ import {
   Filter,
   Plus,
   Paperclip,
-  TrendingUp
+  TrendingUp,
+  Mail
 } from 'lucide-react';
 
 const REASONS = ['Price too high', 'Competitor offer', 'Service Quality issues', 'No longer needed', 'Business closed', 'Other'];
@@ -92,6 +93,18 @@ export default function CSRequestsDashboard() {
   const [trueCancellationDate, setTrueCancellationDate] = useState('');
   const [processMode, setProcessMode] = useState<'save' | 'cancel'>('save');
   const [cancelNotes, setCancelNotes] = useState('');
+
+  // Email Notification States for Processing CS Requests
+  const [sendNotificationEmail, setSendNotificationEmail] = useState(true);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailCc, setEmailCc] = useState('mailplusit@mailplus.com.au, sarah.hart@mailplus.com.au');
+  const [recipientSuggestions, setRecipientSuggestions] = useState<{
+    franchiseeEmail?: string;
+    franchiseeName?: string;
+    contactEmail?: string;
+    contactName?: string;
+  }>({});
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
 
   // Resell workflow states for Customer Retention
   const [fullLeadForResell, setFullLeadForResell] = useState<Lead | null>(null);
@@ -348,6 +361,24 @@ export default function CSRequestsDashboard() {
     return { total, serviceChanges, cancellations, pending };
   }, [requests]);
 
+  const handleAddEmail = (target: 'to' | 'cc', emailToAdd?: string) => {
+    if (!emailToAdd) return;
+    const clean = emailToAdd.trim();
+    if (!clean) return;
+
+    if (target === 'to') {
+      const currentList = emailTo.split(',').map(e => e.trim()).filter(Boolean);
+      if (!currentList.includes(clean)) {
+        setEmailTo(currentList.length > 0 ? `${emailTo}, ${clean}` : clean);
+      }
+    } else {
+      const currentList = emailCc.split(',').map(e => e.trim()).filter(Boolean);
+      if (!currentList.includes(clean)) {
+        setEmailCc(currentList.length > 0 ? `${emailCc}, ${clean}` : clean);
+      }
+    }
+  };
+
   const handleOpenProcess = (req: CSRequest) => {
     setSelectedRequest(req);
     setEditServices(JSON.parse(JSON.stringify(req.requestedServices || req.originalServices || [])));
@@ -359,6 +390,43 @@ export default function CSRequestsDashboard() {
     setTrueCancellationDate(req.cancellationDate?.substring(0, 10) || new Date().toISOString().substring(0, 10));
     setCancelNotes(req.notes || '');
     setProcessMode('save');
+
+    // Email notification defaults
+    setSendNotificationEmail(true);
+    const initialTo = req.contactEmail || '';
+    setEmailTo(initialTo);
+    setEmailCc('mailplusit@mailplus.com.au, sarah.hart@mailplus.com.au');
+    setRecipientSuggestions({
+      contactEmail: req.contactEmail || '',
+      contactName: req.contactName || '',
+    });
+
+    if (req.leadId) {
+      setLoadingRecipients(true);
+      fetch(`/api/cs-requests?action=recipients&leadId=${req.leadId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.success) {
+            setRecipientSuggestions({
+              franchiseeEmail: data.franchiseeEmail,
+              franchiseeName: data.franchiseeName,
+              contactEmail: data.contactEmail || req.contactEmail,
+              contactName: data.contactName || req.contactName,
+            });
+            // If franchisee email exists, default TO to franchisee email
+            if (data.franchiseeEmail) {
+              setEmailTo(data.franchiseeEmail);
+            } else if (data.contactEmail && !initialTo) {
+              setEmailTo(data.contactEmail);
+            }
+            if (data.defaultCc) {
+              setEmailCc(data.defaultCc);
+            }
+          }
+        })
+        .catch(err => console.warn('[CS Requests] Error loading recipient details:', err))
+        .finally(() => setLoadingRecipients(false));
+    }
 
     // Pre-populate cancellation hierarchy IDs
     const activeThemes = getMergedCancellationHierarchy(cancellationThemes);
@@ -508,9 +576,33 @@ export default function CSRequestsDashboard() {
           author: userDisplayName,
         }, compSnap.exists() ? 'companies' : 'leads');
 
+        // Trigger automated Service Change Email Notification if enabled
+        if (sendNotificationEmail && emailTo.trim()) {
+          fetch('/api/notifications/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'service_change_outcome',
+              payload: {
+                outcome: 'Service Change',
+                leadId: selectedRequest.leadId,
+                companyName: selectedRequest.companyName,
+                services: editServices,
+                serviceChangeNotes,
+                effectiveDate: (selectedRequest as any).effectiveDate || new Date().toISOString().split('T')[0],
+                processedBy: userDisplayName,
+                processedByEmail: userProfile?.email || '',
+                customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+                customTo: emailTo.trim(),
+                customCc: emailCc.trim(),
+              }
+            })
+          }).catch(emailErr => console.error("[CS Requests] Error sending service change email:", emailErr));
+        }
+
         toast({
           title: 'Service Change Completed',
-          description: `Services updated for ${selectedRequest.companyName}.`,
+          description: `Services updated for ${selectedRequest.companyName}.${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
         });
       } else {
         // Dismiss / Cancel request
@@ -643,29 +735,33 @@ export default function CSRequestsDashboard() {
         }
 
         // Trigger automated Franchisee Email Notification (Saved)
-        fetch('/api/notifications/email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'franchisee_cancellation_outcome',
-            payload: {
-              outcome: 'Saved',
-              leadId: selectedRequest.leadId,
-              companyName: selectedRequest.companyName,
-              saveStrategy: cancelSaveStrategy,
-              savedDate: effectiveSavedDate,
-              services: editServices,
-              saveNotes: cancelNotes,
-              processedBy: userDisplayName,
-              processedByEmail: userProfile?.email || '',
-              customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
-            }
-          })
-        }).catch(emailErr => console.error("[CS Requests] Error sending franchisee save email:", emailErr));
+        if (sendNotificationEmail && emailTo.trim()) {
+          fetch('/api/notifications/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'franchisee_cancellation_outcome',
+              payload: {
+                outcome: 'Saved',
+                leadId: selectedRequest.leadId,
+                companyName: selectedRequest.companyName,
+                saveStrategy: cancelSaveStrategy,
+                savedDate: effectiveSavedDate,
+                services: editServices,
+                saveNotes: cancelNotes,
+                processedBy: userDisplayName,
+                processedByEmail: userProfile?.email || '',
+                customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+                customTo: emailTo.trim(),
+                customCc: emailCc.trim(),
+              }
+            })
+          }).catch(emailErr => console.error("[CS Requests] Error sending franchisee save email:", emailErr));
+        }
 
         toast({
           title: 'Customer Saved',
-          description: `${selectedRequest.companyName} marked as Saved!`,
+          description: `${selectedRequest.companyName} marked as Saved!${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
         });
       } else {
         // Resolve Theme, Why, and Reason details
@@ -800,31 +896,35 @@ export default function CSRequestsDashboard() {
         }
 
         // Trigger automated Franchisee Email Notification (Cancelled)
-        fetch('/api/notifications/email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'franchisee_cancellation_outcome',
-            payload: {
-              outcome: 'Cancelled',
-              leadId: selectedRequest.leadId,
-              companyName: selectedRequest.companyName,
-              cancellationTheme: themeName,
-              cancellationWhy: whyName,
-              cancellationReason: reasonName,
-              cancellationDate: trueCancellationDate,
-              trueServiceCancellationDate: trueCancellationDate,
-              cancellationNotes: cancelNotes,
-              processedBy: userDisplayName,
-              processedByEmail: userProfile?.email || '',
-              customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
-            }
-          })
-        }).catch(emailErr => console.error("[CS Requests] Error sending franchisee cancel email:", emailErr));
+        if (sendNotificationEmail && emailTo.trim()) {
+          fetch('/api/notifications/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'franchisee_cancellation_outcome',
+              payload: {
+                outcome: 'Cancelled',
+                leadId: selectedRequest.leadId,
+                companyName: selectedRequest.companyName,
+                cancellationTheme: themeName,
+                cancellationWhy: whyName,
+                cancellationReason: reasonName,
+                cancellationDate: trueCancellationDate,
+                trueServiceCancellationDate: trueCancellationDate,
+                cancellationNotes: cancelNotes,
+                processedBy: userDisplayName,
+                processedByEmail: userProfile?.email || '',
+                customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+                customTo: emailTo.trim(),
+                customCc: emailCc.trim(),
+              }
+            })
+          }).catch(emailErr => console.error("[CS Requests] Error sending franchisee cancel email:", emailErr));
+        }
 
         toast({
           title: 'Cancellation Finalized',
-          description: `Service cancellation recorded for ${selectedRequest.companyName}.`,
+          description: `Service cancellation recorded for ${selectedRequest.companyName}.${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
         });
       }
 
@@ -1518,6 +1618,127 @@ export default function CSRequestsDashboard() {
 
                 </div>
               )}
+
+              {/* ---------------- EMAIL NOTIFICATION RECIPIENTS SECTION ---------------- */}
+              <div className="p-4 rounded-xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-slate-50 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-[#095c7b]" />
+                    <span className="text-xs font-bold text-slate-800">Email Notification Recipients</span>
+                    {loadingRecipients && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-sky-600 font-normal">
+                        <Loader className="w-3 h-3 animate-spin" /> Resolving franchisee...
+                      </span>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                    <input
+                      type="checkbox"
+                      checked={sendNotificationEmail}
+                      onChange={(e) => setSendNotificationEmail(e.target.checked)}
+                      className="rounded border-slate-300 text-[#095c7b] focus:ring-[#095c7b] h-3.5 w-3.5"
+                    />
+                    Send Email on Process
+                  </label>
+                </div>
+
+                {sendNotificationEmail && (
+                  <div className="space-y-3 pt-2.5 border-t border-sky-100">
+                    {/* TO Recipients */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[11px] font-bold text-slate-700">
+                          TO Address <span className="text-slate-400 font-normal">(Primary Recipient / Franchisee)</span>
+                        </Label>
+                      </div>
+                      <Input
+                        type="text"
+                        value={emailTo}
+                        onChange={(e) => setEmailTo(e.target.value)}
+                        placeholder="e.g. franchisee@mailplus.com.au, customer@example.com"
+                        className="h-8 text-xs bg-white border-slate-200"
+                      />
+                      {/* Quick Add suggestions for TO */}
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {recipientSuggestions.franchiseeEmail && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddEmail('to', recipientSuggestions.franchiseeEmail)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 transition-colors shadow-2xs"
+                            title="Add franchisee email"
+                          >
+                            + Franchisee: {recipientSuggestions.franchiseeEmail}
+                          </button>
+                        )}
+                        {recipientSuggestions.contactEmail && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddEmail('to', recipientSuggestions.contactEmail)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 transition-colors shadow-2xs"
+                            title="Add customer contact email"
+                          >
+                            + Contact: {recipientSuggestions.contactEmail}
+                          </button>
+                        )}
+                        {userProfile?.email && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddEmail('to', userProfile.email!)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-white hover:bg-sky-100 text-sky-800 border border-sky-200 transition-colors shadow-2xs"
+                            title="Add my email"
+                          >
+                            + Myself: {userProfile.email}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CC Recipients */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[11px] font-bold text-slate-700">
+                          CC Address <span className="text-slate-400 font-normal">(Internal & Tracking)</span>
+                        </Label>
+                      </div>
+                      <Input
+                        type="text"
+                        value={emailCc}
+                        onChange={(e) => setEmailCc(e.target.value)}
+                        placeholder="e.g. mailplusit@mailplus.com.au, sarah.hart@mailplus.com.au"
+                        className="h-8 text-xs bg-white border-slate-200"
+                      />
+                      {/* Quick Add suggestions for CC */}
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleAddEmail('cc', 'mailplusit@mailplus.com.au')}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs"
+                        >
+                          + mailplusit@mailplus.com.au
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAddEmail('cc', 'sarah.hart@mailplus.com.au')}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs"
+                        >
+                          + sarah.hart@mailplus.com.au
+                        </button>
+                        {userProfile?.email && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddEmail('cc', userProfile.email!)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition-colors shadow-2xs"
+                          >
+                            + Myself: {userProfile.email}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-[10.5px] text-slate-500 italic">Separate multiple email addresses with commas. Notification contains the full service and outcome breakdown.</p>
+                  </div>
+                )}
+              </div>
 
             </div>
 

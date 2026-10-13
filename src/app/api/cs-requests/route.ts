@@ -4,6 +4,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { Lead, ServiceSelection } from '@/lib/types';
 import { sendCSRequestNotificationEmail } from '@/lib/cancellation-email';
+import { getFranchiseeInfoForLead } from '@/lib/cancellation-franchisee-email';
 import { findLeadByIdOrInternalId } from '@/lib/lead-lookup';
 
 const db = getFirestore(adminApp);
@@ -334,9 +335,36 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action');
     const leadId = searchParams.get('leadId');
     const prospectPlusId = searchParams.get('prospectPlusId');
     const requestId = searchParams.get('requestId');
+
+    if (action === 'recipients' && (leadId || prospectPlusId)) {
+      const targetId = leadId || prospectPlusId || '';
+      const franInfo = await getFranchiseeInfoForLead(targetId);
+
+      let contactEmail = '';
+      let contactName = '';
+      const compDoc = await db.collection('companies').doc(targetId).get();
+      const leadDoc = compDoc.exists ? compDoc : await db.collection('leads').doc(targetId).get();
+      if (leadDoc.exists) {
+        const d = leadDoc.data();
+        contactEmail = d?.contactEmail || d?.email || '';
+        contactName = d?.contactName || (d?.firstName ? `${d.firstName} ${d.lastName || ''}`.trim() : '');
+      }
+
+      return NextResponse.json({
+        success: true,
+        franchiseeEmail: franInfo.franchiseeEmail || '',
+        franchiseeName: franInfo.franchiseeName || '',
+        franchiseeContact: franInfo.franchiseeContact || '',
+        contactEmail,
+        contactName,
+        defaultCc: 'mailplusit@mailplus.com.au, sarah.hart@mailplus.com.au',
+        suggestedTo: franInfo.franchiseeEmail || contactEmail || '',
+      });
+    }
 
     if (requestId) {
       const docSnap = await db.collection('cs_requests').doc(requestId).get();

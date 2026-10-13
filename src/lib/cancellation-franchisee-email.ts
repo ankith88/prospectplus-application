@@ -3,18 +3,22 @@ import { sendPhysicalEmail } from '@/lib/email-dispatcher';
 import { ServiceSelection } from '@/lib/types';
 
 export interface FranchiseeCancellationOutcomeData {
-  outcome: 'Saved' | 'Cancelled';
+  outcome: 'Saved' | 'Cancelled' | 'Service Change';
   leadId: string;
   companyName: string;
   processedBy?: string;
   processedByEmail?: string;
   customFrom?: string;
+  customTo?: string;
+  customCc?: string;
 
-  // Saved customer specifics
+  // Saved & Service Change customer specifics
   saveStrategy?: string;
   savedDate?: string;
+  effectiveDate?: string;
   services?: ServiceSelection[];
   saveNotes?: string;
+  serviceChangeNotes?: string;
 
   // Cancelled customer specifics
   cancellationTheme?: string;
@@ -121,10 +125,14 @@ export async function sendFranchiseeCancellationOutcomeEmail(
       processedBy = 'Head Office Customer Success Team',
       processedByEmail,
       customFrom,
+      customTo,
+      customCc,
       saveStrategy,
       savedDate,
+      effectiveDate,
       services = [],
       saveNotes,
+      serviceChangeNotes,
       cancellationTheme,
       cancellationWhy,
       cancellationReason,
@@ -146,19 +154,33 @@ export async function sendFranchiseeCancellationOutcomeEmail(
     const franInfo = await getFranchiseeInfoForLead(leadId);
     const franchiseeEmail = franInfo.franchiseeEmail;
 
-    if (!franchiseeEmail) {
-      console.warn(`[Franchisee Email] No franchisee email found for lead ${leadId} (${franInfo.franchiseeName || 'Unassigned'}). Skipping notification.`);
-      return { success: false, reason: `No franchisee email found for franchisee '${franInfo.franchiseeName || 'Unassigned'}'` };
+    // Use customTo if provided, fallback to franchiseeEmail
+    const to = (customTo && customTo.trim()) || franchiseeEmail;
+
+    if (!to) {
+      console.warn(`[CS Outcome Email] No recipient email specified or found for lead ${leadId} (${franInfo.franchiseeName || 'Unassigned'}). Skipping notification.`);
+      return { success: false, reason: `No recipient email specified or found for lead ${leadId}` };
     }
+
+    const defaultCc = 'mailplusit@mailplus.com.au, sarah.hart@mailplus.com.au';
+    const cc = customCc !== undefined ? customCc.trim() : defaultCc;
 
     const companyName = franInfo.companyName || initialCompanyName || 'Customer';
     const address = franInfo.address || 'Address on file';
-    const greetingName = franInfo.franchiseeContact || franInfo.franchiseeName || 'Franchisee';
+    const greetingName = franInfo.franchiseeContact || franInfo.franchiseeName || 'Valued Team';
 
     const isSaved = outcome === 'Saved';
-    const subject = isSaved
-      ? `Customer Retained: ${companyName} - Save Outcome Confirmed`
-      : `Customer Cancellation: ${companyName} - Service Termination Notice`;
+    const isServiceChange = outcome === 'Service Change';
+    const isCancelled = outcome === 'Cancelled';
+
+    let subject = '';
+    if (isSaved) {
+      subject = `Customer Retained: ${companyName} - Save Outcome Confirmed`;
+    } else if (isServiceChange) {
+      subject = `Service Change Completed: ${companyName} - Schedule Updated`;
+    } else {
+      subject = `Customer Cancellation: ${companyName} - Service Termination Notice`;
+    }
 
     // Format active services table for Saved outcome
     let servicesRowsHtml = '';
@@ -207,6 +229,10 @@ export async function sendFranchiseeCancellationOutcomeEmail(
                 <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
                   We are pleased to inform you that customer <strong>${companyName}</strong> in your territory has been <span style="color: #10b981; font-weight: 700;">successfully saved</span> from cancellation and will continue receiving MailPlus services.
                 </p>
+              ` : isServiceChange ? `
+                <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                  Please be advised that the service change request for customer <strong>${companyName}</strong> in your territory has been <span style="color: #095c7b; font-weight: 700;">processed and applied</span>.
+                </p>
               ` : `
                 <p style="margin: 0 0 16px; font-size: 15px; color: #2d3748; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
                   Please be advised that customer <strong>${companyName}</strong> in your territory has <span style="color: #e11d48; font-weight: 700;">cancelled their services</span> with MailPlus.
@@ -220,7 +246,7 @@ export async function sendFranchiseeCancellationOutcomeEmail(
                     <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Company Name:</strong> ${companyName}</p>
                     <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Address:</strong> ${address}</p>
                     <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Franchise Territory:</strong> ${franInfo.franchiseeName || 'Assigned Territory'}</p>
-                    <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Outcome:</strong> <span style="color: ${isSaved ? '#059669' : '#e11d48'}; font-weight: 700;">${isSaved ? 'Customer Retained (Saved)' : 'Service Cancelled'}</span></p>
+                    <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Outcome:</strong> <span style="color: ${isSaved ? '#059669' : isServiceChange ? '#095c7b' : '#e11d48'}; font-weight: 700;">${isSaved ? 'Customer Retained (Saved)' : isServiceChange ? 'Service Change Completed' : 'Service Cancelled'}</span></p>
 
                     <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 12px 0;" />
 
@@ -231,6 +257,16 @@ export async function sendFranchiseeCancellationOutcomeEmail(
                       
                       ${servicesRowsHtml ? `
                         <p style="margin: 12px 0 6px;"><strong style="color: #095c7b;">Active Service Schedule:</strong></p>
+                        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 8px;">
+                          ${servicesRowsHtml}
+                        </table>
+                      ` : ''}
+                    ` : isServiceChange ? `
+                      <p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Effective Date:</strong> ${effectiveDate || savedDate || new Date().toISOString().split('T')[0]}</p>
+                      ${serviceChangeNotes ? `<p style="margin: 0 0 8px;"><strong style="color: #095c7b;">Resolution Notes:</strong> ${serviceChangeNotes}</p>` : ''}
+                      
+                      ${servicesRowsHtml ? `
+                        <p style="margin: 12px 0 6px;"><strong style="color: #095c7b;">Updated Active Service Schedule:</strong></p>
                         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 8px;">
                           ${servicesRowsHtml}
                         </table>
@@ -254,6 +290,17 @@ export async function sendFranchiseeCancellationOutcomeEmail(
                 <p style="margin: 16px 0; font-size: 14px; color: #4a5568; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
                   <strong>Action for Franchisee:</strong> Please continue providing scheduled pickup and delivery services for ${companyName} as normal.
                 </p>
+              ` : isServiceChange ? `
+                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin: 16px 0; padding: 14px;">
+                  <tr>
+                    <td style="font-size: 13px; color: #166534; font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6;">
+                      <strong>Action for Franchisee:</strong>
+                      <p style="margin: 4px 0 0; color: #166534;">
+                        Please update your daily run sheets and customer schedule to reflect the updated active services above.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
               ` : `
                 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; margin: 16px 0; padding: 14px;">
                   <tr>
@@ -332,11 +379,9 @@ export async function sendFranchiseeCancellationOutcomeEmail(
 </body>
 </html>`;
 
-    const cc = 'mailplusit@mailplus.com.au, sarah.hart@mailplus.com.au';
-
     const sendRes = await sendPhysicalEmail({
-      to: franchiseeEmail,
-      cc,
+      to,
+      cc: cc || undefined,
       customFrom: effectiveCustomFrom,
       subject,
       html,
@@ -346,10 +391,11 @@ export async function sendFranchiseeCancellationOutcomeEmail(
     if (sendRes.success) {
       // Log activity to company/lead timeline
       const nowIso = new Date().toISOString();
+      const outcomeLabel = isSaved ? 'Customer Retained' : isServiceChange ? 'Service Change Processed' : 'Service Cancellation';
       const activityPayload = {
         type: 'Email',
         date: nowIso,
-        notes: `Automated ${isSaved ? 'Customer Retained' : 'Service Cancellation'} email sent to Franchisee (${franchiseeEmail}) [CC: ${cc}].`,
+        notes: `Automated ${outcomeLabel} email sent to ${to}${cc ? ` [CC: ${cc}]` : ''}.`,
         author: processedBy || 'Customer Success System',
       };
 
@@ -369,10 +415,10 @@ export async function sendFranchiseeCancellationOutcomeEmail(
     return {
       success: sendRes.success,
       simulated: sendRes.simulated,
-      recipient: franchiseeEmail,
+      recipient: to,
     };
   } catch (err: any) {
-    console.error('[Franchisee Cancellation Outcome Email Error]:', err);
+    console.error('[Franchisee Cancellation/Outcome Email Error]:', err);
     return { success: false, reason: err.message || 'Internal error dispatching email' };
   }
 }
