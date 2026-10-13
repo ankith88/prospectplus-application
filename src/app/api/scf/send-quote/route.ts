@@ -55,6 +55,35 @@ export async function POST(request: Request) {
     }
 
     if (contactsData.length === 0) {
+      // Fallback: If specified contactId(s) weren't found, try looking up contacts subcollection
+      const fallbackSnap = await db.collection(colName).doc(leadId).collection('contacts').get();
+      let foundContact = fallbackSnap.docs.find(d => d.data()?.isPrimary) || (fallbackSnap.docs.length > 0 ? fallbackSnap.docs[0] : null);
+      if (!foundContact) {
+        const altCol = colName === 'companies' ? 'leads' : 'companies';
+        const altFallbackSnap = await db.collection(altCol).doc(leadId).collection('contacts').get();
+        foundContact = altFallbackSnap.docs.find(d => d.data()?.isPrimary) || (altFallbackSnap.docs.length > 0 ? altFallbackSnap.docs[0] : null);
+      }
+      if (foundContact) {
+        contactsData.push(foundContact.data());
+      }
+    }
+
+    if (contactsData.length === 0) {
+      const leadDocData = leadSnap.data() || {};
+      if (Array.isArray(leadDocData.contacts) && leadDocData.contacts.length > 0) {
+        const primaryOrFirst = leadDocData.contacts.find((c: any) => c?.isPrimary) || leadDocData.contacts[0];
+        if (primaryOrFirst && (primaryOrFirst.email || primaryOrFirst.name)) {
+          contactsData.push(primaryOrFirst);
+        }
+      } else if (leadDocData.customerServiceEmail || leadDocData.customerEmail || leadDocData.contactEmail) {
+        contactsData.push({
+          name: leadDocData.contactName || leadDocData.companyName || 'Valued Customer',
+          email: leadDocData.customerServiceEmail || leadDocData.customerEmail || leadDocData.contactEmail
+        });
+      }
+    }
+
+    if (contactsData.length === 0) {
       return NextResponse.json({ success: false, message: 'Contact not found' }, { status: 404 });
     }
 

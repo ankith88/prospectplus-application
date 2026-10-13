@@ -962,7 +962,10 @@ export function ServiceSelectionDialog({
 
       const validContacts = (lead?.contacts || []).filter(c => !isContactEmpty(c));
       const defaultContact = validContacts.find(c => c.isPrimary) || (validContacts.length > 0 ? validContacts[0] : null);
-      const defaultContactId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || (defaultContact ? defaultContact.id : undefined);
+      const isIdValid = (id?: string) => id ? validContacts.some(c => c.id === id) : false;
+      const defaultContactId = (isIdValid((lead as any)?.bookingContactId) ? (lead as any)?.bookingContactId : undefined)
+        || (isIdValid((lead as any)?.serviceCommencementContactId) ? (lead as any)?.serviceCommencementContactId : undefined)
+        || (defaultContact ? defaultContact.id : undefined);
 
       const hasExistingLocalMileAccess = !isLpoNetworkBucket && (lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || validContacts.some(c => c?.accessToLocalMile === 'yes'));
 
@@ -1483,7 +1486,10 @@ export function ServiceSelectionDialog({
        if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
          if (validC.length > 0) {
            const defC = validC.find(c => c.isPrimary) || validC[0];
-           const defId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || defC.id;
+           const isDefValid = (id?: string) => id ? validC.some(c => c.id === id) : false;
+           const defId = (isDefValid((lead as any)?.bookingContactId) ? (lead as any)?.bookingContactId : undefined)
+             || (isDefValid((lead as any)?.serviceCommencementContactId) ? (lead as any)?.serviceCommencementContactId : undefined)
+             || defC.id;
            values.selectedContactIds = [defId];
            form.setValue('selectedContactIds', [defId]);
          } else if (!skipEmail) {
@@ -1609,7 +1615,10 @@ export function ServiceSelectionDialog({
     if (!values.selectedContactIds || values.selectedContactIds.length === 0) {
       if (validC.length > 0) {
         const defC = validC.find(c => c.isPrimary) || validC[0];
-        const defId = (lead as any)?.bookingContactId || (lead as any)?.serviceCommencementContactId || defC.id;
+        const isDefValid = (id?: string) => id ? validC.some(c => c.id === id) : false;
+        const defId = (isDefValid((lead as any)?.bookingContactId) ? (lead as any)?.bookingContactId : undefined)
+          || (isDefValid((lead as any)?.serviceCommencementContactId) ? (lead as any)?.serviceCommencementContactId : undefined)
+          || defC.id;
         values.selectedContactIds = [defId];
         form.setValue('selectedContactIds', [defId]);
       } else if (!skipEmail) {

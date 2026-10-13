@@ -189,7 +189,11 @@ function SelectServicesContent() {
       initialRates = lead.services.reduce((acc, s) => ({ ...acc, [s.name]: s.rate }), {});
     }
 
-    const defaultContactId = (lead as any)?.serviceCommencementContactId || (lead as any)?.bookingContactId || (contacts.find(c => c.isPrimary)?.id) || (contacts[0]?.id);
+    const isIdValid = (id?: string) => id ? (contacts || []).some(c => c.id === id) : false;
+    const defaultContactId = (isIdValid((lead as any)?.serviceCommencementContactId) ? (lead as any)?.serviceCommencementContactId : undefined)
+      || (isIdValid((lead as any)?.bookingContactId) ? (lead as any)?.bookingContactId : undefined)
+      || (contacts.find(c => c.isPrimary)?.id)
+      || (contacts[0]?.id);
 
     const hasExistingLocalMileAccess = !isLpoNetworkBucket && (lead?.hasCreatedJob === true || lead?.localMileTrialsRemaining !== undefined || (lead as any)?.localmileAccess === true || (contacts || []).some(c => c?.accessToLocalMile === 'yes'));
 

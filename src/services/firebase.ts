@@ -2224,7 +2224,15 @@ async function deleteContactFromLead(leadId: string, contactId: string, contactN
     await logActivity(leadId, { type: 'Update', notes: `Contact ${contactName} deleted.` }, collectionName);
     const parentRef = doc(firestore, collectionName, leadId);
     const snap = await getDoc(parentRef);
-    await updateDoc(parentRef, { contactCount: (snap.data()?.contactCount || 0) - 1 });
+    const parentData = snap.data();
+    const updates: Record<string, any> = { contactCount: Math.max(0, (parentData?.contactCount || 0) - 1) };
+    if (parentData?.bookingContactId === contactId) {
+        updates.bookingContactId = deleteField();
+    }
+    if (parentData?.serviceCommencementContactId === contactId) {
+        updates.serviceCommencementContactId = deleteField();
+    }
+    await updateDoc(parentRef, updates);
 }
 
 async function updateLeadDetails(leadId: string, oldLead: Lead | MapLead, newLeadData: Partial<Lead>): Promise<void> {
