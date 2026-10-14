@@ -13,6 +13,10 @@ public:
     method: POST
   - path: /api/dialpad/webhook/**
     method: POST
+  - path: /api/webhooks/firmable/**
+    method: POST
+  - path: /api/firmable/webhook/**
+    method: POST
 
 env:
   - variable: NEXT_PUBLIC_APP_URL
@@ -21,6 +25,8 @@ env:
     value: AIzaSyA92XGDo8rx11izPYT7z2L-YPMMJ6Ih1s0
   - variable: WEBHOOK_SECRET
     secret: WEBHOOK_SECRET
+  - variable: FIRMABLE_WEBHOOK_SECRET
+    secret: FIRMABLE_WEBHOOK_SECRET
   - variable: AIRCALL_API_KEY
     secret: AIRCALL_API_KEY
   - variable: GEMINI_API_KEY

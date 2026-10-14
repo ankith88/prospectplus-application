@@ -34,6 +34,12 @@ export function safeFormatDate(dateVal: any, formatStr: string = 'MMM d, yyyy'):
           const fullYear = year < 100 ? 2000 + year : year;
           d = new Date(fullYear, month - 1, day, 0, 0, 0, 0);
         }
+      } else if (/^\d+(\.\d+)?$/.test(cleaned)) {
+        const num = Number(cleaned);
+        if (!isNaN(num) && num > 0) {
+          const ms = num < 1e11 ? Math.round(num * 1000) : (num > 1e14 ? Math.round(num / 1000) : Math.round(num));
+          d = new Date(ms);
+        }
       } else {
         d = new Date(cleaned);
       }

@@ -139,31 +139,48 @@ export async function createDialpadWebhook(
 
 /**
  * Creates an event subscription for a webhook target on Dialpad (Step 2).
+ * Uses the modern Call Event Subscriptions endpoint: POST https://dialpad.com/api/v2/subscriptions/call
  */
 export async function createDialpadSubscription(
   webhookId: string | number,
-  callEvents: string[] = ['call_hungup', 'call_missed', 'call_connected', 'transcription_ready', 'recording_ready'],
+  callEvents: string[] = ['all'],
   apiKeyOverride?: string
 ): Promise<{ success: boolean; subscriptionId?: string | number; error?: string }> {
   const headers = getDialpadAuthHeaders(apiKeyOverride);
   if (!headers) return { success: false, error: 'Missing Dialpad API key' };
 
   try {
-    const res = await fetch('https://dialpad.com/api/v2/subscriptions', {
+    // 1. Try modern Call Event Subscriptions endpoint
+    const res = await fetch('https://dialpad.com/api/v2/subscriptions/call', {
       method: 'POST',
       headers,
       body: JSON.stringify({
         webhook_id: String(webhookId),
-        call_events: callEvents,
+        call_states: callEvents.length > 0 ? callEvents : ['all'],
       }),
     });
 
-    if (!res.ok) {
+    if (res.ok) {
+      const data = await res.json() as any;
+      return { success: true, subscriptionId: data.id };
+    }
+
+    // 2. Fallback to generic subscriptions endpoint
+    const fallbackRes = await fetch('https://dialpad.com/api/v2/subscriptions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        webhook_id: String(webhookId),
+        call_events: ['call_hungup', 'call_missed', 'call_connected', 'transcription_ready', 'recording_ready'],
+      }),
+    });
+
+    if (!fallbackRes.ok) {
       const err = await res.text();
       return { success: false, error: `HTTP ${res.status}: ${err}` };
     }
 
-    const data = await res.json() as any;
+    const data = await fallbackRes.json() as any;
     return { success: true, subscriptionId: data.id };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -204,24 +221,39 @@ export async function fetchDialpadTranscript(callId: string, apiKeyOverride?: st
   }
 }
 
-function parseDialpadTranscriptPayload(data: any): { utterances: Array<{ speaker: string; text: string; start_time?: number; end_time?: number }> } | null {
+function parseDialpadTranscriptPayload(data: any): { utterances: Array<{ speaker: string; text: string; participant_type?: 'internal' | 'external'; user_id?: string; start_time?: number; end_time?: number; time?: string }> } | null {
   if (!data) return null;
-  const rawUtterances = data.utterances || data.items || data.transcript?.utterances || [];
-  if (!Array.isArray(rawUtterances) || rawUtterances.length === 0) {
-    if (typeof data.text === 'string' && data.text.trim()) {
-      return { utterances: [{ speaker: 'Unknown', text: data.text }] };
+  // Dialpad REST API returns spoken transcript lines in `data.lines`
+  const rawLines = data.lines || data.utterances || data.items || data.transcript?.utterances || [];
+  if (Array.isArray(rawLines) && rawLines.length > 0) {
+    // Filter for actual transcript utterances (exclude internal marker moments like 'action_item_v2', 'question')
+    const transcriptItems = rawLines.filter((l: any) => l.type === 'transcript' || (!l.type && (l.content || l.text)));
+    const targetItems = transcriptItems.length > 0 ? transcriptItems : rawLines.filter((l: any) => l.type !== 'moment');
+
+    const utterances = targetItems.map((u: any) => {
+      const isInternal = Boolean(u.user_id || u.is_internal || (u.name && !u.name.startsWith('+') && !u.name.startsWith('04')));
+      const speaker = u.name || u.speaker || u.speaker_name || (isInternal ? 'Agent' : 'Customer');
+      const text = u.content || u.text || u.words || '';
+      return {
+        speaker: String(speaker).trim() || (isInternal ? 'Agent' : 'Customer'),
+        text: String(text).trim(),
+        participant_type: (isInternal ? 'internal' : 'external') as 'internal' | 'external',
+        user_id: u.user_id ? String(u.user_id) : undefined,
+        time: u.time,
+        start_time: u.start_time || u.start_time_ms ? (u.start_time || u.start_time_ms / 1000) : undefined,
+        end_time: u.end_time || u.end_time_ms ? (u.end_time || u.end_time_ms / 1000) : undefined,
+      };
+    }).filter((u: any) => u.text.length > 0);
+
+    if (utterances.length > 0) {
+      return { utterances };
     }
-    return null;
   }
 
-  const utterances = rawUtterances.map((u: any) => ({
-    speaker: u.speaker || u.speaker_name || (u.is_internal ? 'Agent' : 'Customer'),
-    text: u.text || u.content || u.words || '',
-    start_time: u.start_time || u.start_time_ms ? (u.start_time || u.start_time_ms / 1000) : undefined,
-    end_time: u.end_time || u.end_time_ms ? (u.end_time || u.end_time_ms / 1000) : undefined,
-  })).filter((u: any) => u.text.trim().length > 0);
-
-  return utterances.length > 0 ? { utterances } : null;
+  if (typeof data.text === 'string' && data.text.trim()) {
+    return { utterances: [{ speaker: 'Unknown', text: data.text.trim(), participant_type: 'external' }] };
+  }
+  return null;
 }
 
 /**

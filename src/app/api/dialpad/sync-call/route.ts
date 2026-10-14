@@ -21,7 +21,11 @@ export async function POST(req: NextRequest) {
         }, { status: 404 });
       }
 
-      const res = await syncDialpadCallRecord(callData);
+      const res = await syncDialpadCallRecord(callData, undefined, {
+        leadId,
+        collectionType: collectionType || 'leads',
+        activityId,
+      });
       return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
@@ -29,7 +33,8 @@ export async function POST(req: NextRequest) {
     const res = await syncRecentDialpadCallForLead(
       leadId,
       phoneNumber,
-      collectionType || 'leads'
+      collectionType || 'leads',
+      activityId
     );
 
     return NextResponse.json(res, { status: res.success ? 200 : 400 });

@@ -26,13 +26,13 @@ export function classifyDepartment(title: string): string {
 export function determineConfidence(title: string): 'High' | 'Medium' | 'Low' {
   const t = title.toLowerCase();
   if (
-    /logistic|warehouse|dispatch|supply\s*chain|shipping\s*manager|operations\s*manager|general\s*manager|managing\s*director|founder|ceo|owner|co-owner/i.test(
+    /logistic|warehouse|dispatch|supply\s*chain|shipping\s*manager|operations\s*manager|general\s*manager|managing\s*director|\bdirector\b|founder|ceo|owner|co-owner/i.test(
       t
     )
   ) {
     return 'High';
   }
-  if (/operations|coordinator|supervisor|director|manager|lead|e-commerce/i.test(t)) {
+  if (/operations|coordinator|supervisor|manager|lead|e-commerce/i.test(t)) {
     return 'Medium';
   }
   return 'Low';
@@ -88,6 +88,22 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 }
 
 /**
+ * Synthesizes predicted corporate email from Hunter domain pattern
+ */
+function synthesizePatternEmail(pattern: string, firstName: string, lastName: string, domain: string): string | null {
+  const f = firstName.toLowerCase().replace(/[^a-z]/g, '');
+  const l = lastName.toLowerCase().replace(/[^a-z]/g, '');
+  if (!f) return null;
+
+  if (pattern === '{first}') return `${f}@${domain}`;
+  if (pattern === '{first}.{last}') return l ? `${f}.${l}@${domain}` : `${f}@${domain}`;
+  if (pattern === '{f}{last}') return l ? `${f[0]}${l}@${domain}` : `${f}@${domain}`;
+  if (pattern === '{first}{l}') return l ? `${f}${l[0]}@${domain}` : `${f}@${domain}`;
+  if (pattern === '{last}') return l ? `${l}@${domain}` : `${f}@${domain}`;
+  return null;
+}
+
+/**
  * Enriches LinkedIn Decision Maker candidates with verified business emails, direct phone numbers,
  * and authoritative job titles from Hunter.io.
  */
@@ -118,11 +134,13 @@ export async function enrichCandidatesWithHunter(
     const timeout = setTimeout(() => controller.abort(), 7000); // 7s timeout
 
     let domainEmails: any[] = [];
+    let domainPattern: string | undefined = undefined;
     try {
       const res = await fetch(domainSearchUrl, { signal: controller.signal as any });
       if (res.ok) {
         const json = await res.json();
         domainEmails = json?.data?.emails || [];
+        domainPattern = json?.data?.pattern;
       } else {
         console.warn(`[Hunter Domain Search] HTTP ${res.status} for domain ${domain}`);
       }
@@ -154,6 +172,9 @@ export async function enrichCandidatesWithHunter(
         // Email address contains both first and last name
         if (lLower.length >= 3 && eVal.includes(lLower) && eVal.includes(fLower)) return true;
 
+        // First name exact match if single-word email (e.g. tara@)
+        if (eFirst && eFirst === fLower && eVal.startsWith(fLower + '@')) return true;
+
         // LinkedIn profile match if returned by Hunter
         if (
           candidate.linkedinUrl &&
@@ -177,26 +198,32 @@ export async function enrichCandidatesWithHunter(
         if (match.position && typeof match.position === 'string' && match.position.trim().length > 1) {
           const cleanPosition = match.position.trim();
           candidate.title = companyName ? `${cleanPosition} at ${companyName}` : cleanPosition;
-          candidate.department = classifyDepartment(candidate.title);
-          candidate.confidence = determineConfidence(candidate.title);
         }
+        candidate.department = classifyDepartment(candidate.title);
+        candidate.confidence = determineConfidence(candidate.title);
         candidate.hunterEnriched = true;
       }
     }
 
     // -------------------------------------------------------------
     // Step 2: For top priority candidates still missing an email,
-    // query Hunter's Email Finder API specifically (max 2 top candidates)
+    // query Hunter's Email Finder API specifically, with pattern fallback & verification
     // -------------------------------------------------------------
     const unmatchedTopCandidates = candidates
-      .filter((c) => !c.email && (c.confidence === 'High' || c.title.toLowerCase().includes('founder') || c.title.toLowerCase().includes('manager')))
-      .slice(0, 2);
+      .filter((c) => !c.email && (c.confidence === 'High' || c.confidence === 'Medium' || /founder|owner|director|ceo|manager/i.test(c.title)))
+      .slice(0, 5);
 
     for (const candidate of unmatchedTopCandidates) {
       const { firstName, lastName } = splitName(candidate.name);
       if (!firstName || !lastName || lastName.length < 2) continue;
 
       try {
+        let foundEmail: string | null = null;
+        let foundScore: number = 85;
+        let foundPhone: string | null = null;
+        let foundPosition: string | null = null;
+
+        // Option A: Try official Email Finder
         const finderController = new AbortController();
         const finderTimeout = setTimeout(() => finderController.abort(), 6000);
 
@@ -210,23 +237,54 @@ export async function enrichCandidatesWithHunter(
             const finderJson = await finderRes.json();
             const data = finderJson?.data;
             if (data?.email) {
-              candidate.email = data.email;
-              candidate.emailScore = typeof data.score === 'number' ? data.score : 85;
-              if (data.phone_number) {
-                candidate.phone = data.phone_number;
-              }
-              // Correct title using Hunter's verified corporate position
+              foundEmail = data.email;
+              foundScore = typeof data.score === 'number' ? data.score : 85;
+              if (data.phone_number) foundPhone = data.phone_number;
               if (data.position && typeof data.position === 'string' && data.position.trim().length > 1) {
-                const cleanPosition = data.position.trim();
-                candidate.title = companyName ? `${cleanPosition} at ${companyName}` : cleanPosition;
-                candidate.department = classifyDepartment(candidate.title);
-                candidate.confidence = determineConfidence(candidate.title);
+                foundPosition = data.position.trim();
               }
-              candidate.hunterEnriched = true;
             }
           }
         } finally {
           clearTimeout(finderTimeout);
+        }
+
+        // Option B: If Email Finder didn't match but domain pattern is known, synthesize & verify
+        if (!foundEmail && domainPattern) {
+          const predictedEmail = synthesizePatternEmail(domainPattern, firstName, lastName, domain);
+          if (predictedEmail) {
+            const verifyController = new AbortController();
+            const verifyTimeout = setTimeout(() => verifyController.abort(), 5000);
+            try {
+              const verifyUrl = `https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(
+                predictedEmail
+              )}&api_key=${apiKey}`;
+              const verifyRes = await fetch(verifyUrl, { signal: verifyController.signal as any });
+              if (verifyRes.ok) {
+                const verifyJson = await verifyRes.json();
+                const vData = verifyJson?.data;
+                if (vData?.status === 'valid' || vData?.result === 'deliverable') {
+                  foundEmail = predictedEmail;
+                  foundScore = typeof vData.score === 'number' ? vData.score : 90;
+                }
+              }
+            } catch {
+            } finally {
+              clearTimeout(verifyTimeout);
+            }
+          }
+        }
+
+        if (foundEmail) {
+          candidate.email = foundEmail;
+          candidate.emailScore = foundScore;
+          if (foundPhone) candidate.phone = foundPhone;
+          if (foundPosition) {
+            candidate.title = companyName ? `${foundPosition} at ${companyName}` : foundPosition;
+            candidate.department = classifyDepartment(candidate.title);
+            candidate.confidence = determineConfidence(candidate.title);
+          }
+          candidate.hunterEnriched = true;
         }
       } catch (err: any) {
         console.warn(`[Hunter Email Finder] Lookup error for ${candidate.name} @ ${domain}:`, err.message || err);

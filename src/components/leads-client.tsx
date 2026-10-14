@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getLeadsFromFirebase, subscribeLeadsFromFirebase } from '@/services/firebase'
+import { getLeadsFromFirebase, subscribeLeadsFromFirebase, computeIsAiEnriched } from '@/services/firebase'
 import { replaceTemplatePlaceholders, extractUserMobile } from '@/lib/template-replacer'
 import { initiateOutboundCall, resolveUserTelephonyProvider } from '@/lib/telephony'
 import { LeadStatusBadge } from '@/components/lead-status-badge'
@@ -1054,6 +1054,10 @@ export default function LeadsClientPage({
     setCurrentPage(1);
   };
 
+  const isLeadEnriched = useCallback((lead: Lead): boolean => {
+    return Boolean(lead.isAiEnriched || computeIsAiEnriched(lead));
+  }, []);
+
   const filteredLeads = useMemo(() => {
     let leads = allLeads.filter(lead => {
       const isAccountManager = userProfile?.activeRole === 'Account Managers' || userProfile?.activeRole === 'Account Manager' || userProfile?.activeRole === 'account managers';
@@ -1109,10 +1113,11 @@ export default function LeadsClientPage({
       const entityIdMatch = filters.entityId ? lead.entityId?.toLowerCase().includes(filters.entityId.toLowerCase()) : true;
       const customerStatusMatch = filters.customerStatus.length === 0 || (lead.customerStatus && filters.customerStatus.includes(lead.customerStatus));
 
+      const isEnriched = isLeadEnriched(lead);
       const aiEnrichmentMatch =
         filters.aiEnrichment === 'all' ||
-        (filters.aiEnrichment === 'enriched' && Boolean(lead.isAiEnriched)) ||
-        (filters.aiEnrichment === 'not_enriched' && !lead.isAiEnriched);
+        (filters.aiEnrichment === 'enriched' && isEnriched) ||
+        (filters.aiEnrichment === 'not_enriched' && !isEnriched);
 
       return !isArchived && !isFieldSalesLead && companyNameMatch && prospectPlusIdMatch && statusMatch && franchiseeMatch && campaignMatch && suburbMatch && stateMatch && dateLeadEnteredMatch && dateDialerAssignedMatch && sourceMatch && entityIdMatch && bucketMatch && customerStatusMatch && aiEnrichmentMatch;
     });
@@ -1128,8 +1133,8 @@ export default function LeadsClientPage({
           aValue = a.customerSource || '';
           bValue = b.customerSource || '';
         } else if (sortConfig.key === 'isAiEnriched') {
-          aValue = a.isAiEnriched ? 1 : 0;
-          bValue = b.isAiEnriched ? 1 : 0;
+          aValue = isLeadEnriched(a) ? 1 : 0;
+          bValue = isLeadEnriched(b) ? 1 : 0;
         } else {
           aValue = a[sortConfig.key as keyof Lead] ?? '';
           bValue = b[sortConfig.key as keyof Lead] ?? '';
@@ -1584,7 +1589,18 @@ export default function LeadsClientPage({
   };
 
   const renderAiEnrichmentCell = (lead: Lead) => {
-    if (lead.isAiEnriched) {
+    if (isLeadEnriched(lead)) {
+      const ecom = lead.ecommercePlatform || lead.shopifyDetected;
+      const showEcom = ecom && !['no', 'none', 'not detected', 'not checked', 'false'].includes(ecom.toLowerCase().trim());
+      const formattedDate = lead.enrichedAt ? (() => {
+        try {
+          const d = new Date(lead.enrichedAt);
+          return !isNaN(d.getTime()) ? format(d, 'PP') : null;
+        } catch {
+          return null;
+        }
+      })() : null;
+
       return (
         <TooltipProvider>
           <Tooltip>
@@ -1600,8 +1616,8 @@ export default function LeadsClientPage({
                 <span>AI &amp; Agent Reach Enriched</span>
               </div>
               {lead.enrichedBy && <p className="text-slate-600 text-[11px]">By: {lead.enrichedBy}</p>}
-              {lead.enrichedAt && <p className="text-slate-500 text-[11px]">Date: {format(new Date(lead.enrichedAt), 'PP')}</p>}
-              {lead.shopifyDetected && <p className="text-emerald-700 font-medium">eCommerce: {lead.shopifyDetected}</p>}
+              {formattedDate && <p className="text-slate-500 text-[11px]">Date: {formattedDate}</p>}
+              {showEcom && <p className="text-emerald-700 font-medium">eCommerce: {ecom}</p>}
               {lead.hasMultipleBranches && <p className="text-blue-700 font-medium">Branches: {lead.totalBranchCount || 'Multiple'}</p>}
               {lead.hasPoBox && <p className="text-amber-700 font-medium">PO Box Detected</p>}
               {(lead.decisionMakerName || lead.agentReachDossier?.decisionMakers?.[0]?.name) && (
@@ -1614,6 +1630,11 @@ export default function LeadsClientPage({
                 <p className="text-emerald-700 font-medium flex items-center gap-1">
                   <Truck className="w-3 h-3 text-emerald-600 shrink-0" />
                   <span>Carriers: {lead.agentReachDossier.logisticsSignals.carrierDetected.join(', ')}</span>
+                </p>
+              )}
+              {lead.prospectSummary && (
+                <p className="text-slate-600 text-[11px] line-clamp-2 italic pt-1 border-t border-slate-100">
+                  &ldquo;{lead.prospectSummary}&rdquo;
                 </p>
               )}
             </TooltipContent>

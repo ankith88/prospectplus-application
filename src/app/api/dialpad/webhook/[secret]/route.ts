@@ -32,7 +32,7 @@ export async function POST(
     const eventType = (event.event || event.type || callData.state || '').toLowerCase();
 
     // Check if event is relevant
-    const isHungup = eventType.includes('hungup') || eventType.includes('completed') || callData.state === 'hungup';
+    const isHungup = eventType.includes('hungup') || eventType.includes('hangup') || eventType.includes('completed') || callData.state === 'hungup' || callData.state === 'hangup';
     const isMissed = eventType.includes('missed') || callData.state === 'missed';
     const isTranscriptReady = eventType.includes('transcript');
 

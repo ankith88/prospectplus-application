@@ -1277,7 +1277,16 @@ export function ImportLeadsClient() {
         const effectiveStatus = normalizeLeadStatus(rawStatus, defaultLeadStatus);
         const noteContent = getVal('notes');
 
-        // Bucket & Assignments config
+        // Enrichment Fields (BR - BZ)
+        const hasImportedEnrichment = Boolean(
+          getVal('lodgementEvidence') ||
+          getVal('shipperEvidence') ||
+          getVal('prospectSummary') ||
+          getVal('suggestedProduct') ||
+          getVal('suggestedOpener') ||
+          getVal('suggestedPersonalisation')
+        );
+
         const leadData: any = {
           companyName,
           status: effectiveStatus,
@@ -1292,6 +1301,11 @@ export function ImportLeadsClient() {
           ...(additionalAddresses.length > 0 && { additionalAddresses }),
           ...(noteContent && noteContent.trim() && { notesText: noteContent.trim(), statusNotes: noteContent.trim() }),
           // Enrichment Fields (BR - BZ)
+          ...(hasImportedEnrichment && {
+            isAiEnriched: true,
+            enrichedAt: nowStr,
+            enrichedBy: `Bulk Import (${authorName})`,
+          }),
           ...(getVal('lodgementEvidence') && { lodgementEvidence: getVal('lodgementEvidence') }),
           ...(getVal('shipperEvidence') && { shipperEvidence: getVal('shipperEvidence') }),
           ...(getVal('shopifyDetected') && { shopifyDetected: getVal('shopifyDetected') }),
@@ -1302,6 +1316,7 @@ export function ImportLeadsClient() {
           ...(getVal('suggestedOpener') && { suggestedOpener: getVal('suggestedOpener') }),
           ...(getVal('suggestedPersonalisation') && { suggestedPersonalisation: getVal('suggestedPersonalisation') }),
           discoveryData: {
+            ...(hasImportedEnrichment && { isAiEnriched: true, lastEnriched: nowStr }),
             ...(getVal('lodgementEvidence') && { lodgementEvidence: getVal('lodgementEvidence') }),
             ...(getVal('shipperEvidence') && { shipperEvidence: getVal('shipperEvidence') }),
             ...(getVal('shopifyDetected') && { shopifyDetected: getVal('shopifyDetected') }),

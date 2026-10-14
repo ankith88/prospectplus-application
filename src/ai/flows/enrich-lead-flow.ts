@@ -720,6 +720,8 @@ export async function enrichLeadAction(
     const existingDiscovery = leadData.discoveryData || {};
     const updatedDiscovery: Record<string, any> = {
       ...existingDiscovery,
+      isAiEnriched: true,
+      lastEnriched: new Date().toISOString(),
     };
 
     if (agentReachDossier) {

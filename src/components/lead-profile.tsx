@@ -745,10 +745,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
 
     const [syncingDialpadActivityId, setSyncingDialpadActivityId] = useState<string | null>(null);
 
-    const handleSyncDialpadCall = async (activityId: string, targetPhone?: string) => {
+    const handleSyncDialpadCall = async (activityId: string, targetPhone?: string, manualCallId?: string) => {
         try {
             setSyncingDialpadActivityId(activityId);
-            toast({ title: "Checking Dialpad...", description: "Querying Dialpad API for call conclusion and details..." });
+            toast({ title: "Checking Dialpad...", description: manualCallId ? `Querying Dialpad for Call ID ${manualCallId}...` : "Querying Dialpad API for call conclusion and details..." });
             const res = await fetch('/api/dialpad/sync-call', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -756,6 +756,7 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     leadId: lead.id,
                     phoneNumber: targetPhone || lead.customerPhone || (lead as any).phone,
                     activityId,
+                    manualCallId: manualCallId ? String(manualCallId).trim() : undefined,
                     collectionType: 'leads',
                 }),
             });
@@ -5396,6 +5397,14 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
     return [...calls].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   }, [activities]);
 
+  const pendingCalls = useMemo(() => {
+    return (activities || []).filter(a =>
+      a.type === 'Call' &&
+      !a.callId &&
+      (a.telephonyStatus === 'initiated' || a.aircallStatus === 'initiated' || a.notes?.toLowerCase().includes('initiated call'))
+    ).sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  }, [activities]);
+
   const sortedNotes = useMemo(() => {
     return [...(lead.notes || notes || [])].sort((a, b) => new Date(b.date || (b as any).createdAt || 0).getTime() - new Date(a.date || (a as any).createdAt || 0).getTime());
   }, [lead.notes, notes]);
@@ -8921,11 +8930,58 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                             <Phone className="w-5 h-5 text-muted-foreground" />
                             Calls
                         </CardTitle>
-                        <Badge variant="secondary" className="font-semibold text-xs bg-slate-100 text-slate-700 border border-slate-200">
-                            {uniqueCallIdsCount} Unique Call{uniqueCallIdsCount === 1 ? '' : 's'} (with Call ID)
+                        <Badge variant="secondary" className="font-semibold text-xs bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1.5">
+                            <span>{uniqueCallIdsCount} Unique Call{uniqueCallIdsCount === 1 ? '' : 's'} (with Call ID)</span>
+                            {pendingCalls.length > 0 && (
+                                <span className="text-purple-700 font-medium bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                    • {pendingCalls.length} Pending Sync
+                                </span>
+                            )}
                         </Badge>
                     </CardHeader>
                     <CardContent className="pt-6 space-y-4">
+                        {pendingCalls.map(pCall => {
+                            const isDialpad = pCall.telephonyProvider === 'dialpad' || pCall.notes?.toLowerCase().includes('dialpad');
+                            return (
+                                <div key={pCall.id} className="p-3 rounded-lg border border-purple-200 bg-purple-50/50 dark:bg-purple-950/20 dark:border-purple-800 space-y-2">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300 font-semibold text-[11px]">
+                                                    {isDialpad ? 'Dialpad Call Initiated (Pending Sync)' : 'AirCall Call Initiated (Pending Sync)'}
+                                                </Badge>
+                                            </div>
+                                            <p className="font-medium text-foreground text-sm mt-1">{cleanCallNotes(pCall.notes)}</p>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                                {pCall.author && <span>Performed by: {pCall.author}</span>}
+                                                {pCall.phoneNumber && <span>• Number: {pCall.phoneNumber}</span>}
+                                            </div>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground shrink-0 text-right">
+                                            {safeFormatDate(pCall.date, 'PPpp')}
+                                        </span>
+                                    </div>
+                                    {isDialpad && (
+                                        <div className="flex items-center gap-2 pt-1">
+                                            <Button
+                                                size="sm"
+                                                className="h-8 px-3 text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold inline-flex items-center gap-1.5 shadow-sm"
+                                                onClick={() => handleSyncDialpadCall(pCall.id, pCall.phoneNumber || lead.customerPhone || (lead as any).phone)}
+                                                disabled={syncingDialpadActivityId === pCall.id}
+                                            >
+                                                {syncingDialpadActivityId === pCall.id ? (
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                ) : (
+                                                    <RefreshCw className="w-3.5 h-3.5" />
+                                                )}
+                                                Sync Call ID from Dialpad
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+
                         {callHistory.map(call => {
                             const isDialpadCall = call.telephonyProvider === 'dialpad' || call.notes?.toLowerCase().includes('dialpad');
                             const recordingAssetUrl = call.recordingAssetUrl || call.recordingUrl || (call as any).recording || (!isDialpadCall && call.callId ? `https://assets.aircall.io/calls/${call.callId}/recording/info` : undefined);
@@ -9009,7 +9065,9 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                                 </div>
                             );
                         })}
-                        {callHistory.length === 0 && <p className="text-sm text-muted-foreground text-center">No calls found.</p>}
+                        {callHistory.length === 0 && pendingCalls.length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center">No calls found.</p>
+                        )}
                     </CardContent>
                 </Card>
                 <Card>

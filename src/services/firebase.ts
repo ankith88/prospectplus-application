@@ -204,6 +204,32 @@ function safeGetStatus(status: any): LeadStatus {
     return 'New';
 }
 
+function computeIsAiEnriched(data: any): boolean {
+    if (!data) return false;
+    if (data.isAiEnriched === true || data.discoveryData?.isAiEnriched === true) {
+        return true;
+    }
+    return Boolean(
+        data.enrichedAt ||
+        data.discoveryData?.lastEnriched ||
+        data.discoveryData?.enrichedAt ||
+        data.agentReachDossier ||
+        (data.prospectSummary && String(data.prospectSummary).trim().length > 0) ||
+        (data.discoveryData?.prospectSummary && String(data.discoveryData.prospectSummary).trim().length > 0) ||
+        (data.shipperEvidence && String(data.shipperEvidence).trim().length > 0) ||
+        (data.discoveryData?.shipperEvidence && String(data.discoveryData.shipperEvidence).trim().length > 0) ||
+        (data.lodgementEvidence && String(data.lodgementEvidence).trim().length > 0) ||
+        (data.discoveryData?.lodgementEvidence && String(data.discoveryData.lodgementEvidence).trim().length > 0) ||
+        (data.suggestedOpener && String(data.suggestedOpener).trim().length > 0) ||
+        (data.discoveryData?.suggestedOpener && String(data.discoveryData.suggestedOpener).trim().length > 0) ||
+        (data.suggestedProduct && String(data.suggestedProduct).trim().length > 0) ||
+        (data.discoveryData?.suggestedProduct && String(data.discoveryData.suggestedProduct).trim().length > 0) ||
+        (data.suggestedPersonalisation && String(data.suggestedPersonalisation).trim().length > 0) ||
+        (data.discoveryData?.suggestedPersonalisation && String(data.discoveryData.suggestedPersonalisation).trim().length > 0)
+    );
+}
+
+
 async function getUserAircallId(displayName: string): Promise<string | null> {
     try {
         const users = await getAllUsers();
@@ -311,9 +337,9 @@ async function getLeadFromFirebase(leadId: string, includeSubCollections = true)
           linkedEcommerceEntities: data.linkedEcommerceEntities || data.discoveryData?.linkedEcommerceEntities || [],
           mainEntityRole: data.mainEntityRole || data.discoveryData?.mainEntityRole,
           fulfilmentModel: data.fulfilmentModel || data.discoveryData?.fulfilmentModel,
-          isAiEnriched: data.isAiEnriched ?? data.discoveryData?.isAiEnriched,
-          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt,
-          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy,
+          isAiEnriched: computeIsAiEnriched(data),
+          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt || data.discoveryData?.lastEnriched,
+          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy || (computeIsAiEnriched(data) ? 'AI Lead Intelligence' : undefined),
           decisionMakerName: data.decisionMakerName,
           decisionMakerTitle: data.decisionMakerTitle,
           agentReachDossier: data.agentReachDossier || data.discoveryData?.agentReachDossier,
@@ -532,9 +558,9 @@ async function getCompanyFromFirebase(companyId: string, includeSubCollections =
           linkedEcommerceEntities: data.linkedEcommerceEntities || data.discoveryData?.linkedEcommerceEntities || [],
           mainEntityRole: data.mainEntityRole || data.discoveryData?.mainEntityRole,
           fulfilmentModel: data.fulfilmentModel || data.discoveryData?.fulfilmentModel,
-          isAiEnriched: data.isAiEnriched ?? data.discoveryData?.isAiEnriched,
-          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt,
-          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy,
+          isAiEnriched: computeIsAiEnriched(data),
+          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt || data.discoveryData?.lastEnriched,
+          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy || (computeIsAiEnriched(data) ? 'AI Lead Intelligence' : undefined),
           leadType: data.leadType,
           demoCompleted: data.demoCompleted,
           fieldSales: data.fieldSales,
@@ -748,9 +774,9 @@ async function getLeadsFromFirebase(options?: { leadId?: string, leadIds?: strin
           linkedEcommerceEntities: data.linkedEcommerceEntities || data.discoveryData?.linkedEcommerceEntities || [],
           mainEntityRole: data.mainEntityRole || data.discoveryData?.mainEntityRole,
           fulfilmentModel: data.fulfilmentModel || data.discoveryData?.fulfilmentModel,
-          isAiEnriched: data.isAiEnriched ?? data.discoveryData?.isAiEnriched,
-          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt,
-          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy,
+          isAiEnriched: computeIsAiEnriched(data),
+          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt || data.discoveryData?.lastEnriched,
+          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy || (computeIsAiEnriched(data) ? 'AI Lead Intelligence' : undefined),
           decisionMakerName: data.decisionMakerName,
           decisionMakerTitle: data.decisionMakerTitle,
           agentReachDossier: data.agentReachDossier || data.discoveryData?.agentReachDossier,
@@ -927,9 +953,9 @@ function subscribeLeadsFromFirebase(
           linkedEcommerceEntities: data.linkedEcommerceEntities || data.discoveryData?.linkedEcommerceEntities || [],
           mainEntityRole: data.mainEntityRole || data.discoveryData?.mainEntityRole,
           fulfilmentModel: data.fulfilmentModel || data.discoveryData?.fulfilmentModel,
-          isAiEnriched: data.isAiEnriched ?? data.discoveryData?.isAiEnriched,
-          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt,
-          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy,
+          isAiEnriched: computeIsAiEnriched(data),
+          enrichedAt: data.enrichedAt || data.discoveryData?.enrichedAt || data.discoveryData?.lastEnriched,
+          enrichedBy: data.enrichedBy || data.discoveryData?.enrichedBy || (computeIsAiEnriched(data) ? 'AI Lead Intelligence' : undefined),
           decisionMakerName: data.decisionMakerName,
           decisionMakerTitle: data.decisionMakerTitle,
           agentReachDossier: data.agentReachDossier || data.discoveryData?.agentReachDossier,
@@ -4111,6 +4137,7 @@ async function getLastInvoicesForCompanies(companyIds: string[]): Promise<Record
 }
 
 export { 
+    computeIsAiEnriched,
     getLastInvoiceForCompany,
     getLastInvoicesForCompanies,
     bulkUpdateDialerAssignmentDate,
