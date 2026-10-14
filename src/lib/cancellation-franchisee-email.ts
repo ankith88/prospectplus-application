@@ -155,7 +155,9 @@ export async function sendFranchiseeCancellationOutcomeEmail(
     const franchiseeEmail = franInfo.franchiseeEmail;
 
     // Use customTo if provided, fallback to franchiseeEmail
-    const to = (customTo && customTo.trim()) || franchiseeEmail;
+    const rawTo = (customTo && customTo.trim()) || franchiseeEmail || '';
+    const cleanToList = rawTo.split(',').map(e => e.trim()).filter(Boolean);
+    const to = cleanToList.join(', ');
 
     if (!to) {
       console.warn(`[CS Outcome Email] No recipient email specified or found for lead ${leadId} (${franInfo.franchiseeName || 'Unassigned'}). Skipping notification.`);
@@ -163,7 +165,9 @@ export async function sendFranchiseeCancellationOutcomeEmail(
     }
 
     const defaultCc = 'mailplusit@mailplus.com.au, sarah.hart@mailplus.com.au';
-    const cc = customCc !== undefined ? customCc.trim() : defaultCc;
+    const rawCc = customCc !== undefined ? customCc.trim() : defaultCc;
+    const cleanCcList = rawCc ? rawCc.split(',').map(e => e.trim()).filter(Boolean) : [];
+    const cc = cleanCcList.join(', ');
 
     const companyName = franInfo.companyName || initialCompanyName || 'Customer';
     const address = franInfo.address || 'Address on file';

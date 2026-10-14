@@ -231,12 +231,16 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
       const activeCustomFrom = effectiveCustomFrom || customFrom;
       const fromHeader = activeCustomFrom ? activeCustomFrom : `"${config.senderName || 'MailPlus Outbound'}" <${finalSender}>`;
 
+      const validToString = (to || '').split(',').map(e => e.trim()).filter(Boolean).join(', ');
+      const validCcString = finalCc ? finalCc.split(',').map(e => e.trim()).filter(Boolean).join(', ') : undefined;
+      const validBccString = bcc ? bcc.split(',').map(e => e.trim()).filter(Boolean).join(', ') : undefined;
+
       await transporter.sendMail({
         from: fromHeader,
         replyTo: activeCustomFrom || undefined,
-        to,
-        cc: finalCc,
-        bcc,
+        to: validToString,
+        cc: validCcString,
+        bcc: validBccString,
         subject,
         html: updatedHtml,
         attachments: smtpAttachments
@@ -308,6 +312,17 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
         }
       }
 
+      const validToRecipients = (to || '')
+        .split(',')
+        .map(e => e.trim())
+        .filter(Boolean)
+        .map(address => ({ emailAddress: { address } }));
+
+      if (validToRecipients.length === 0) {
+        console.warn('[Email Dispatcher] No valid recipients in "to" field. Skipping transmission.');
+        return { success: false, simulated: false, error: 'No valid recipient email address specified.' };
+      }
+
       const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${finalSender}/sendMail`;
       const mailPayload: any = {
         message: {
@@ -316,17 +331,31 @@ export async function sendPhysicalEmail({ to, subject, html, customFrom, cc, bcc
             contentType: 'HTML',
             content: updatedHtml
           },
-          toRecipients: to.split(',').map(e => ({ emailAddress: { address: e.trim() } })),
+          toRecipients: validToRecipients,
           attachments: graphAttachments
         },
         saveToSentItems: 'true'
       };
 
       if (finalCc) {
-        mailPayload.message.ccRecipients = finalCc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));
+        const validCcRecipients = finalCc
+          .split(',')
+          .map(e => e.trim())
+          .filter(Boolean)
+          .map(address => ({ emailAddress: { address } }));
+        if (validCcRecipients.length > 0) {
+          mailPayload.message.ccRecipients = validCcRecipients;
+        }
       }
       if (bcc) {
-        mailPayload.message.bccRecipients = bcc.split(',').map(e => ({ emailAddress: { address: e.trim() } }));
+        const validBccRecipients = bcc
+          .split(',')
+          .map(e => e.trim())
+          .filter(Boolean)
+          .map(address => ({ emailAddress: { address } }));
+        if (validBccRecipients.length > 0) {
+          mailPayload.message.bccRecipients = validBccRecipients;
+        }
       }
 
       let graphRes = await fetch(sendMailUrl, {

@@ -544,12 +544,12 @@ export default function CSRequestsDashboard() {
     if (target === 'to') {
       const currentList = emailTo.split(',').map(e => e.trim()).filter(Boolean);
       if (!currentList.includes(clean)) {
-        setEmailTo(currentList.length > 0 ? `${emailTo}, ${clean}` : clean);
+        setEmailTo([...currentList, clean].join(', '));
       }
     } else {
       const currentList = emailCc.split(',').map(e => e.trim()).filter(Boolean);
       if (!currentList.includes(clean)) {
-        setEmailCc(currentList.length > 0 ? `${emailCc}, ${clean}` : clean);
+        setEmailCc([...currentList, clean].join(', '));
       }
     }
   };
@@ -865,38 +865,53 @@ export default function CSRequestsDashboard() {
             author: userDisplayName,
           }, compSnap.exists() ? 'companies' : 'leads');
 
+          const sanitizedTo = emailTo.split(',').map(e => e.trim()).filter(Boolean).join(', ');
+          const sanitizedCc = emailCc.split(',').map(e => e.trim()).filter(Boolean).join(', ');
+
           toast({
             title: 'Service Change Completed',
-            description: `Services and MRR ($${calculatedNewMRR.toFixed(2)}/mo) updated immediately (Effective: ${targetEffectiveDate}).${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
+            description: `Services and MRR ($${calculatedNewMRR.toFixed(2)}/mo) updated immediately (Effective: ${targetEffectiveDate}).${sendNotificationEmail && sanitizedTo ? ` Notification sent to ${sanitizedTo}.` : ''}`,
           });
-        }
 
-        // Trigger automated Service Change Email Notification if enabled
-        if (sendNotificationEmail && emailTo.trim()) {
-          fetch('/api/notifications/email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'service_change_outcome',
-              payload: {
-                outcome: 'Service Change',
-                leadId: selectedRequest.leadId,
-                companyName: selectedRequest.companyName,
-                services: editServices,
-                originalMRR: effectiveBaselineMRR,
-                newMRR: calculatedNewMRR,
-                mrrDelta: calculatedDelta,
-                serviceChangeNotes,
-                effectiveDate: targetEffectiveDate,
-                isFutureDated,
-                processedBy: userDisplayName,
-                processedByEmail: userProfile?.email || '',
-                customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
-                customTo: emailTo.trim(),
-                customCc: emailCc.trim(),
-              }
+          // Trigger automated Service Change Email Notification if enabled
+          if (sendNotificationEmail && sanitizedTo) {
+            fetch('/api/notifications/email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'service_change_outcome',
+                payload: {
+                  outcome: 'Service Change',
+                  leadId: selectedRequest.leadId,
+                  companyName: selectedRequest.companyName,
+                  services: editServices,
+                  originalMRR: effectiveBaselineMRR,
+                  newMRR: calculatedNewMRR,
+                  mrrDelta: calculatedDelta,
+                  serviceChangeNotes,
+                  effectiveDate: targetEffectiveDate,
+                  isFutureDated,
+                  processedBy: userDisplayName,
+                  processedByEmail: userProfile?.email || '',
+                  customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
+                  customTo: sanitizedTo,
+                  customCc: sanitizedCc,
+                }
+              })
             })
-          }).catch(emailErr => console.error("[CS Requests] Error sending service change email:", emailErr));
+              .then(res => res.json())
+              .then(data => {
+                if (data && !data.success) {
+                  console.warn('[CS Requests] Email notification failed:', data.reason || data.error);
+                  toast({
+                    title: 'Email Delivery Warning',
+                    description: `Service change applied, but notification email failed: ${data.reason || 'Unknown error'}`,
+                    variant: 'destructive',
+                  });
+                }
+              })
+              .catch(emailErr => console.error("[CS Requests] Error sending service change email:", emailErr));
+          }
         }
       } else {
         // Dismiss / Cancel request
@@ -1029,7 +1044,10 @@ export default function CSRequestsDashboard() {
         }
 
         // Trigger automated Franchisee Email Notification (Saved)
-        if (sendNotificationEmail && emailTo.trim()) {
+        const sanitizedTo = emailTo.split(',').map(e => e.trim()).filter(Boolean).join(', ');
+        const sanitizedCc = emailCc.split(',').map(e => e.trim()).filter(Boolean).join(', ');
+
+        if (sendNotificationEmail && sanitizedTo) {
           fetch('/api/notifications/email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1046,16 +1064,28 @@ export default function CSRequestsDashboard() {
                 processedBy: userDisplayName,
                 processedByEmail: userProfile?.email || '',
                 customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
-                customTo: emailTo.trim(),
-                customCc: emailCc.trim(),
+                customTo: sanitizedTo,
+                customCc: sanitizedCc,
               }
             })
-          }).catch(emailErr => console.error("[CS Requests] Error sending franchisee save email:", emailErr));
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data && !data.success) {
+                console.warn('[CS Requests] Email notification failed:', data.reason || data.error);
+                toast({
+                  title: 'Email Delivery Warning',
+                  description: `Customer marked as Saved, but notification email failed: ${data.reason || 'Unknown error'}`,
+                  variant: 'destructive',
+                });
+              }
+            })
+            .catch(emailErr => console.error("[CS Requests] Error sending franchisee save email:", emailErr));
         }
 
         toast({
           title: 'Customer Saved',
-          description: `${selectedRequest.companyName} marked as Saved!${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
+          description: `${selectedRequest.companyName} marked as Saved!${sendNotificationEmail && sanitizedTo ? ` Notification sent to ${sanitizedTo}.` : ''}`,
         });
       } else {
         // Resolve Theme, Why, and Reason details
@@ -1190,7 +1220,10 @@ export default function CSRequestsDashboard() {
         }
 
         // Trigger automated Franchisee Email Notification (Cancelled)
-        if (sendNotificationEmail && emailTo.trim()) {
+        const sanitizedTo = emailTo.split(',').map(e => e.trim()).filter(Boolean).join(', ');
+        const sanitizedCc = emailCc.split(',').map(e => e.trim()).filter(Boolean).join(', ');
+
+        if (sendNotificationEmail && sanitizedTo) {
           fetch('/api/notifications/email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1209,16 +1242,28 @@ export default function CSRequestsDashboard() {
                 processedBy: userDisplayName,
                 processedByEmail: userProfile?.email || '',
                 customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
-                customTo: emailTo.trim(),
-                customCc: emailCc.trim(),
+                customTo: sanitizedTo,
+                customCc: sanitizedCc,
               }
             })
-          }).catch(emailErr => console.error("[CS Requests] Error sending franchisee cancel email:", emailErr));
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data && !data.success) {
+                console.warn('[CS Requests] Email notification failed:', data.reason || data.error);
+                toast({
+                  title: 'Email Delivery Warning',
+                  description: `Cancellation recorded, but notification email failed: ${data.reason || 'Unknown error'}`,
+                  variant: 'destructive',
+                });
+              }
+            })
+            .catch(emailErr => console.error("[CS Requests] Error sending franchisee cancel email:", emailErr));
         }
 
         toast({
           title: 'Cancellation Finalized',
-          description: `Service cancellation recorded for ${selectedRequest.companyName}.${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
+          description: `Service cancellation recorded for ${selectedRequest.companyName}.${sendNotificationEmail && sanitizedTo ? ` Notification sent to ${sanitizedTo}.` : ''}`,
         });
       }
 
