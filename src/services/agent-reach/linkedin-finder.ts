@@ -1,45 +1,13 @@
 import { DecisionMakerCandidate } from '@/lib/types';
 import { searchExa } from './exa-discovery';
 import { runCliCommand } from './runner';
-import { enrichCandidatesWithHunter } from './hunter-enricher';
+import {
+  classifyDepartment,
+  determineConfidence,
+  enrichCandidatesWithHunter,
+} from './hunter-enricher';
 
-/**
- * Classify a person's role into high-value sales departments for MailPlus
- */
-function classifyDepartment(title: string): string {
-  const t = title.toLowerCase();
-  if (/logistic|supply\s*chain|freight|transport|shipping/i.test(t)) {
-    return 'Logistics & Supply Chain';
-  }
-  if (/warehouse|dispatch|distribution|fulfil|inventory|packing/i.test(t)) {
-    return 'Warehouse & Dispatch';
-  }
-  if (/operat|production|general\s*manager|\bgm\b|branch\s*manager/i.test(t)) {
-    return 'Operations & Management';
-  }
-  if (/founder|owner|ceo|managing\s*director|director|co-founder/i.test(t)) {
-    return 'Executive & Ownership';
-  }
-  return 'General Management';
-}
-
-/**
- * Determine relevance confidence for cold calling
- */
-function determineConfidence(title: string): 'High' | 'Medium' | 'Low' {
-  const t = title.toLowerCase();
-  if (
-    /logistic|warehouse|dispatch|supply\s*chain|shipping\s*manager|operations\s*manager|general\s*manager|managing\s*director|owner/i.test(
-      t
-    )
-  ) {
-    return 'High';
-  }
-  if (/operations|coordinator|supervisor|director|manager|lead/i.test(t)) {
-    return 'Medium';
-  }
-  return 'Low';
-}
+export { classifyDepartment, determineConfidence };
 
 /**
  * Clean up person name from LinkedIn title
@@ -52,8 +20,61 @@ function parsePersonFromTitle(rawTitle: string): { name: string; title: string }
   if (!role) {
     role = 'Management';
   }
-  // Remove "at <Company>" trailing if repetitive
   return { name, title: role };
+}
+
+/**
+ * Intelligently extract actual executive or operational job title from LinkedIn snippet/highlights
+ * when page title only has person name or generic fallback.
+ */
+export function extractRoleFromSnippet(snippet: string, companyName?: string): string | null {
+  if (!snippet) return null;
+
+  // Pattern 1: Heading from markdown: "### Co-Owner - [Proud Poppy Clothing]" or "### Director - Proud Poppy Clothing"
+  const mdHeadingMatch = snippet.match(/###\s*(.+?)\s+[-–—]\s+(?:\[([^\]]+)\](?:\([^)]+\))?|([^\n(]+))/);
+  if (mdHeadingMatch) {
+    const rawRole = mdHeadingMatch[1].trim();
+    if (rawRole && !rawRole.toLowerCase().includes('company') && rawRole.length > 2 && rawRole.length < 50) {
+      const comp = companyName || mdHeadingMatch[2]?.trim() || mdHeadingMatch[3]?.trim();
+      return comp ? `${rawRole} at ${comp}` : rawRole;
+    }
+  }
+
+  // Pattern 2: "#### E-Commerce Manager (Current)"
+  const currentRoleMatch = snippet.match(/####\s*([A-Za-z0-9\s&,/'-]+?)\s*\(Current\)/i);
+  if (currentRoleMatch) {
+    const rawRole = currentRoleMatch[1].trim();
+    if (rawRole && rawRole.length > 2 && rawRole.length < 50) {
+      return companyName ? `${rawRole} at ${companyName}` : rawRole;
+    }
+  }
+
+  // Pattern 3: Top headline line: "Founder & CEO at Proud Poppy Clothing | Online Retail #8 ..."
+  const lines = snippet.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (const line of lines.slice(0, 3)) {
+    const segment = line.split('|')[0].trim();
+    if (
+      /(founder|ceo|director|owner|manager|head\b|lead\b|coordinator|supervisor|officer|partner|president|specialist)/i.test(
+        segment
+      ) &&
+      !segment.startsWith('http') &&
+      !segment.startsWith('###') &&
+      !segment.startsWith('####') &&
+      segment.length <= 70
+    ) {
+      return segment;
+    }
+  }
+
+  // Pattern 4: Inline regex: "[Role] at [Company]"
+  const inlineMatch = snippet.match(
+    /\b((?:Founder\s*(?:&\s*CEO)?|Co-Founder|CEO|Managing\s*Director|General\s*Manager|Director|Owner|Co-Owner|Operations\s*Manager|Logistics\s*Manager|Warehouse\s*Manager|Dispatch\s*Manager|Supply\s*Chain\s*Manager|E-Commerce\s*Manager)[\w\s&,/'-]{0,35}?(?:\s+(?:at|@)\s+[A-Za-z0-9\s&'-]+)?)/i
+  );
+  if (inlineMatch && inlineMatch[1].trim().length > 2) {
+    return inlineMatch[1].trim();
+  }
+
+  return null;
 }
 
 /**
@@ -75,8 +96,22 @@ export async function findDecisionMakers(
     if (!item.url || seenUrls.has(item.url)) continue;
     seenUrls.add(item.url);
 
-    const { name, title } = parsePersonFromTitle(item.title);
+    let { name, title } = parsePersonFromTitle(item.title);
     if (!name || name.length < 2 || name.toLowerCase().includes('linkedin')) continue;
+
+    // If title parsed from the page title is generic ('Management') or matches companyName,
+    // intelligently extract the real executive or operational title from item.snippet!
+    if (
+      !title ||
+      title.toLowerCase() === 'management' ||
+      (companyName && title.toLowerCase() === companyName.toLowerCase()) ||
+      title.toLowerCase() === 'australia'
+    ) {
+      const snippetRole = extractRoleFromSnippet(item.snippet, companyName);
+      if (snippetRole) {
+        title = snippetRole;
+      }
+    }
 
     const department = classifyDepartment(title);
     const confidence = determineConfidence(title);
@@ -92,18 +127,18 @@ export async function findDecisionMakers(
     });
   }
 
-  // Sort candidates by High confidence first
-  const order = { High: 0, Medium: 1, Low: 2 };
-  candidates.sort((a, b) => (order[a.confidence || 'Low'] || 2) - (order[b.confidence || 'Low'] || 2));
-
-  // Enrich candidates with verified business emails and direct phone numbers via Hunter.io
-  if (candidates.length > 0 && websiteUrl) {
+  // Enrich candidates with verified business emails, direct phone numbers, and authoritative titles via Hunter.io
+  if (candidates.length > 0 && (websiteUrl || companyName)) {
     try {
-      await enrichCandidatesWithHunter(candidates, websiteUrl);
+      await enrichCandidatesWithHunter(candidates, websiteUrl, companyName);
     } catch (err: any) {
       console.warn(`[findDecisionMakers] Hunter enrichment non-fatal error for ${companyName}:`, err.message || err);
     }
   }
+
+  // Sort candidates by High confidence first
+  const order = { High: 0, Medium: 1, Low: 2 };
+  candidates.sort((a, b) => (order[a.confidence || 'Low'] || 2) - (order[b.confidence || 'Low'] || 2));
 
   return candidates;
 }

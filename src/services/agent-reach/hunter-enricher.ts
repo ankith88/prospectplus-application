@@ -1,6 +1,44 @@
 import { DecisionMakerCandidate } from '@/lib/types';
 
 /**
+ * Classify a person's role into high-value sales departments for MailPlus
+ */
+export function classifyDepartment(title: string): string {
+  const t = title.toLowerCase();
+  if (/logistic|supply\s*chain|freight|transport|shipping/i.test(t)) {
+    return 'Logistics & Supply Chain';
+  }
+  if (/warehouse|dispatch|distribution|fulfil|inventory|packing/i.test(t)) {
+    return 'Warehouse & Dispatch';
+  }
+  if (/operat|production|general\s*manager|\bgm\b|branch\s*manager/i.test(t)) {
+    return 'Operations & Management';
+  }
+  if (/founder|owner|ceo|managing\s*director|director|co-founder/i.test(t)) {
+    return 'Executive & Ownership';
+  }
+  return 'General Management';
+}
+
+/**
+ * Determine relevance confidence for cold calling
+ */
+export function determineConfidence(title: string): 'High' | 'Medium' | 'Low' {
+  const t = title.toLowerCase();
+  if (
+    /logistic|warehouse|dispatch|supply\s*chain|shipping\s*manager|operations\s*manager|general\s*manager|managing\s*director|founder|ceo|owner|co-owner/i.test(
+      t
+    )
+  ) {
+    return 'High';
+  }
+  if (/operations|coordinator|supervisor|director|manager|lead|e-commerce/i.test(t)) {
+    return 'Medium';
+  }
+  return 'Low';
+}
+
+/**
  * Extracts and sanitizes clean domain from a URL or raw domain string
  */
 export function extractCleanDomain(urlOrDomain?: string): string | null {
@@ -50,12 +88,13 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 }
 
 /**
- * Enriches LinkedIn Decision Maker candidates with verified business emails and direct phone numbers
- * using Hunter.io Domain Search and Email Finder APIs.
+ * Enriches LinkedIn Decision Maker candidates with verified business emails, direct phone numbers,
+ * and authoritative job titles from Hunter.io.
  */
 export async function enrichCandidatesWithHunter(
   candidates: DecisionMakerCandidate[],
-  domainOrUrl?: string
+  domainOrUrl?: string,
+  companyName?: string
 ): Promise<DecisionMakerCandidate[]> {
   const apiKey = process.env.HUNTER_API_KEY;
   if (!apiKey) {
@@ -93,6 +132,8 @@ export async function enrichCandidatesWithHunter(
       clearTimeout(timeout);
     }
 
+    const matchedHunterEmails = new Set<string>();
+
     // Match domain search results with candidate list
     for (const candidate of candidates) {
       const { firstName, lastName } = splitName(candidate.name);
@@ -126,10 +167,18 @@ export async function enrichCandidatesWithHunter(
       });
 
       if (match) {
+        matchedHunterEmails.add(match.value);
         candidate.email = match.value;
         candidate.emailScore = typeof match.confidence === 'number' ? match.confidence : match.verification?.score || 90;
         if (match.phone_number) {
           candidate.phone = match.phone_number;
+        }
+        // Correct title using Hunter's verified corporate position if available
+        if (match.position && typeof match.position === 'string' && match.position.trim().length > 1) {
+          const cleanPosition = match.position.trim();
+          candidate.title = companyName ? `${cleanPosition} at ${companyName}` : cleanPosition;
+          candidate.department = classifyDepartment(candidate.title);
+          candidate.confidence = determineConfidence(candidate.title);
         }
         candidate.hunterEnriched = true;
       }
@@ -140,7 +189,7 @@ export async function enrichCandidatesWithHunter(
     // query Hunter's Email Finder API specifically (max 2 top candidates)
     // -------------------------------------------------------------
     const unmatchedTopCandidates = candidates
-      .filter((c) => !c.email && c.confidence === 'High')
+      .filter((c) => !c.email && (c.confidence === 'High' || c.title.toLowerCase().includes('founder') || c.title.toLowerCase().includes('manager')))
       .slice(0, 2);
 
     for (const candidate of unmatchedTopCandidates) {
@@ -165,6 +214,13 @@ export async function enrichCandidatesWithHunter(
               candidate.emailScore = typeof data.score === 'number' ? data.score : 85;
               if (data.phone_number) {
                 candidate.phone = data.phone_number;
+              }
+              // Correct title using Hunter's verified corporate position
+              if (data.position && typeof data.position === 'string' && data.position.trim().length > 1) {
+                const cleanPosition = data.position.trim();
+                candidate.title = companyName ? `${cleanPosition} at ${companyName}` : cleanPosition;
+                candidate.department = classifyDepartment(candidate.title);
+                candidate.confidence = determineConfidence(candidate.title);
               }
               candidate.hunterEnriched = true;
             }
