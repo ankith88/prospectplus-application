@@ -17,12 +17,13 @@ export interface LeadDossierInput {
  * Combining Domain Discovery, LinkedIn Decision Makers, Logistics Intel, and Social Footprint
  */
 export async function generateLeadDossier(input: LeadDossierInput): Promise<AgentReachDossier> {
-  const { companyName, suburb, state } = input;
-  let websiteUrl = input.websiteUrl;
+  const companyName = (input.companyName || 'Company').trim();
+  const { suburb, state } = input;
+  let websiteUrl = input.websiteUrl?.trim();
   let verifiedDomain: string | undefined = undefined;
 
   // 1. If website is missing, discover it via Exa
-  if (!websiteUrl || websiteUrl.trim() === '') {
+  if (!websiteUrl || websiteUrl === '') {
     try {
       const discovered = await searchCompanyWebsite(companyName, suburb, state);
       if (discovered.url) {

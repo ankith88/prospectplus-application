@@ -1,5 +1,5 @@
 import { DecisionMakerCandidate } from '@/lib/types';
-import { searchExa } from './exa-discovery';
+import { searchExa, cleanCompanyName } from './exa-discovery';
 import { runCliCommand } from './runner';
 import {
   classifyDepartment,
@@ -85,12 +85,31 @@ export async function findDecisionMakers(
   companyName: string,
   websiteUrl?: string
 ): Promise<DecisionMakerCandidate[]> {
+  const cleanName = cleanCompanyName(companyName) || companyName.trim();
   const candidates: DecisionMakerCandidate[] = [];
   const seenUrls = new Set<string>();
 
   // Primary search: Logistics, Operations, Warehouse, Dispatch leaders
-  const query = `site:linkedin.com/in "${companyName}" (Logistics OR Operations OR Warehouse OR "Supply Chain" OR Dispatch OR "General Manager" OR Director OR Founder OR Owner)`;
-  const results = await searchExa(query, 6);
+  const query = `site:linkedin.com/in "${cleanName}" (Logistics OR Operations OR Warehouse OR "Supply Chain" OR Dispatch OR "General Manager" OR Director OR Founder OR Owner)`;
+  let results = await searchExa(query, 6);
+
+  // Fallback 1: If 0 results, search without strict quotes
+  if (results.length === 0) {
+    const fallbackQuery = `site:linkedin.com/in ${cleanName} (Logistics OR Operations OR Warehouse OR "Supply Chain" OR Dispatch OR "General Manager" OR Director OR Founder OR Owner)`;
+    results = await searchExa(fallbackQuery, 6);
+  }
+
+  // Fallback 2: If still 0 results and website is available, search using domain stem
+  if (results.length === 0 && websiteUrl) {
+    try {
+      const parsed = new URL(websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`);
+      const domainStem = parsed.hostname.replace(/^www\./, '').split('.')[0];
+      if (domainStem && domainStem.length > 3) {
+        const domainQuery = `site:linkedin.com/in "${domainStem}" (Logistics OR Operations OR Warehouse OR "Supply Chain" OR Dispatch OR "General Manager" OR Director OR Founder OR Owner)`;
+        results = await searchExa(domainQuery, 6);
+      }
+    } catch {}
+  }
 
   for (const item of results) {
     if (!item.url || seenUrls.has(item.url)) continue;
@@ -104,10 +123,10 @@ export async function findDecisionMakers(
     if (
       !title ||
       title.toLowerCase() === 'management' ||
-      (companyName && title.toLowerCase() === companyName.toLowerCase()) ||
+      (cleanName && title.toLowerCase() === cleanName.toLowerCase()) ||
       title.toLowerCase() === 'australia'
     ) {
-      const snippetRole = extractRoleFromSnippet(item.snippet, companyName);
+      const snippetRole = extractRoleFromSnippet(item.snippet, cleanName);
       if (snippetRole) {
         title = snippetRole;
       }
@@ -128,11 +147,11 @@ export async function findDecisionMakers(
   }
 
   // Enrich candidates with verified business emails, direct phone numbers, and authoritative titles via Hunter.io
-  if (candidates.length > 0 && (websiteUrl || companyName)) {
+  if (candidates.length > 0 && (websiteUrl || cleanName)) {
     try {
-      await enrichCandidatesWithHunter(candidates, websiteUrl, companyName);
+      await enrichCandidatesWithHunter(candidates, websiteUrl, cleanName);
     } catch (err: any) {
-      console.warn(`[findDecisionMakers] Hunter enrichment non-fatal error for ${companyName}:`, err.message || err);
+      console.warn(`[findDecisionMakers] Hunter enrichment non-fatal error for ${cleanName}:`, err.message || err);
     }
   }
 

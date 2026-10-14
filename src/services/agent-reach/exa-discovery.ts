@@ -76,6 +76,18 @@ const DIRECTORY_DOMAINS = [
 ];
 
 /**
+ * Clean company name by stripping common corporate entity suffixes and excess whitespace
+ */
+export function cleanCompanyName(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .replace(/\b(pty\.?\s*ltd\.?|pty|ltd\.?|limited|inc\.?|llc|holdings|group)\b/gi, '')
+    .replace(/[()[\]{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Find the official website domain for an Australian business when missing from CRM
  */
 export async function searchCompanyWebsite(
@@ -83,7 +95,8 @@ export async function searchCompanyWebsite(
   suburb?: string,
   state?: string
 ): Promise<{ url?: string; domain?: string; title?: string }> {
-  const query = `"${companyName}" official website ${suburb || ''} ${state || ''} Australia`.trim();
+  const cleanName = cleanCompanyName(companyName) || companyName.trim();
+  const query = `"${cleanName}" official website ${suburb || ''} ${state || ''} Australia`.trim();
   const results = await searchExa(query, 6);
 
   for (const item of results) {
@@ -124,6 +137,7 @@ export async function searchLogisticsEvidence(
   companyName: string,
   websiteUrl?: string
 ): Promise<LogisticsEvidence> {
+  const cleanName = cleanCompanyName(companyName) || companyName.trim();
   const rawSnippets: string[] = [];
   const shippingPoliciesFound: string[] = [];
   const dispatchLocations: string[] = [];
@@ -141,8 +155,8 @@ export async function searchLogisticsEvidence(
   const queries = [
     domain
       ? `site:${domain} (shipping policy OR delivery times OR express dispatch OR returns)`
-      : `"${companyName}" shipping policy delivery times Australia`,
-    `"${companyName}" Australia (warehouse OR "distribution centre" OR dispatch OR courier OR pickup)`,
+      : `"${cleanName}" shipping policy delivery times Australia`,
+    `"${cleanName}" Australia (warehouse OR "distribution centre" OR dispatch OR courier OR pickup)`,
   ];
 
   for (const q of queries) {
