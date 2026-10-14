@@ -9492,17 +9492,36 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                 <CardContent className="space-y-2">
                     {(isCompanyProfile || isSignedCustomer(lead)) && (
                         <>
-                            {!isLpoNetworkBucket && (
-                                ['user', 'Customer Success', 'customer success', 'Customer Service', 'customer service'].includes(userProfile?.activeRole || '') ? (
-                                    <Button className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsNotifyUpsellDialogOpen(true)}>
-                                        <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell / Resell
-                                    </Button>
-                                ) : (
-                                    <Button className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#095c7b]/90 shadow-sm" variant="default" onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}>
-                                        <Briefcase className="mr-2 h-4 w-4" />Resell / Send New Quote
-                                    </Button>
-                                )
-                            )}
+                            {!isLpoNetworkBucket && (() => {
+                                const roleLower = (userProfile?.activeRole || userProfile?.role || '').toLowerCase().trim();
+                                const assignedRolesLower = (userProfile?.assignedRoles || []).map(r => String(r).toLowerCase().trim());
+                                const isCustomerSuccess = roleLower === 'customer success' || roleLower === 'customer_success' || assignedRolesLower.includes('customer success');
+                                const isCustomerServiceOrUser = !isCustomerSuccess && ['user', 'customer service', 'customer_service'].includes(roleLower);
+                                const canNotifyAm = isCustomerSuccess || ['user', 'customer service', 'customer_service'].includes(roleLower);
+
+                                return (
+                                    <>
+                                        {!isCustomerServiceOrUser && (
+                                            <Button 
+                                                className="w-full justify-start font-medium bg-[#095c7b] text-white hover:bg-[#095c7b]/90 shadow-sm" 
+                                                variant="default" 
+                                                onClick={() => { requireLeadType(() => checkPrimary(async () => { await ensureFranchiseeIdField(); setServiceSelectionMode('Resell'); setIsServiceSelectionOpen(true); })); }}
+                                            >
+                                                <Briefcase className="mr-2 h-4 w-4" />Resell / Send New Quote
+                                            </Button>
+                                        )}
+                                        {canNotifyAm && (
+                                            <Button 
+                                                className="w-full justify-start bg-background hover:bg-muted font-medium text-emerald-700 border-emerald-200" 
+                                                variant="outline" 
+                                                onClick={() => setIsNotifyUpsellDialogOpen(true)}
+                                            >
+                                                <TrendingUp className="mr-2 h-4 w-4" />Notify AM for Upsell / Resell
+                                            </Button>
+                                        )}
+                                    </>
+                                );
+                            })()}
                             <Button className="w-full justify-start font-medium bg-background hover:bg-muted text-emerald-700 border-emerald-200" variant="outline" onClick={() => setIsOnboardingDialogOpen(true)}>
                                 <CalendarCheck className="mr-2 h-4 w-4 text-emerald-600" />Organise Onboarding Request
                             </Button>
