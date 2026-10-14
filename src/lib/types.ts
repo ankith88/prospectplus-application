@@ -114,8 +114,16 @@ export interface Activity {
   isReviewed?: boolean;
   syncedWithNetSuite?: boolean;
   aircallStatus?: string;
+  telephonyProvider?: 'aircall' | 'dialpad' | string;
+  telephonyStatus?: string;
+  direction?: 'inbound' | 'outbound';
+  phoneNumber?: string;
   recordingUrl?: string;
   recordingAssetUrl?: string;
+  recording?: string;
+  disposition?: string;
+  durationSeconds?: number;
+  durationLabel?: string;
   event?: string;
   isCustomerSuccess?: boolean;
 }

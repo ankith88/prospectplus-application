@@ -8,12 +8,13 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { logTranscriptActivityServer } from '@/services/firebase-server';
-
+import { fetchDialpadTranscript } from '@/services/telephony/dialpad-provider';
 
 const GetTranscriptByCallIdInputSchema = z.object({
-  callId: z.string().describe('The AirCall call ID to fetch the transcript for.'),
+  callId: z.string().describe('The call ID to fetch the transcript for.'),
   leadId: z.string().describe('The ID of the lead to associate the transcript with.'),
   leadAuthor: z.string().describe('The author to associate with the logged note.'),
+  provider: z.string().optional().describe('Telephony provider: "dialpad" or "aircall"'),
 });
 export type GetTranscriptByCallIdInput = z.infer<typeof GetTranscriptByCallIdInputSchema>;
 
@@ -31,11 +32,35 @@ const getCallTranscriptByCallIdFlow = ai.defineFlow(
     inputSchema: GetTranscriptByCallIdInputSchema,
     outputSchema: GetTranscriptByCallIdOutputSchema,
   },
-  async ({ callId, leadId, leadAuthor }) => {
+  async ({ callId, leadId, leadAuthor, provider }) => {
+    // If provider is explicitly Dialpad, fetch directly from Dialpad API
+    if (provider === 'dialpad') {
+      const dialpadTranscript = await fetchDialpadTranscript(callId);
+      if (dialpadTranscript?.utterances?.length) {
+        await logTranscriptActivityServer(leadId, 'leads', {
+          content: JSON.stringify(dialpadTranscript.utterances),
+          author: leadAuthor,
+          callId: callId,
+        });
+        return { transcriptFound: true };
+      }
+      return { transcriptFound: false, error: 'No transcript content found in Dialpad for this call.' };
+    }
+
     const apiId = process.env.AIRCALL_API_ID || process.env.NEXT_PUBLIC_AIRCALL_API_ID;
     const apiToken = process.env.AIRCALL_API_TOKEN || process.env.NEXT_PUBLIC_AIRCALL_API_TOKEN;
 
     if (!apiId || !apiToken) {
+      // Fallback: try Dialpad in case this was a Dialpad call
+      const dialpadTranscript = await fetchDialpadTranscript(callId);
+      if (dialpadTranscript?.utterances?.length) {
+        await logTranscriptActivityServer(leadId, 'leads', {
+          content: JSON.stringify(dialpadTranscript.utterances),
+          author: leadAuthor,
+          callId: callId,
+        });
+        return { transcriptFound: true };
+      }
       return { transcriptFound: false, error: 'AirCall credentials missing.' };
     }
 
@@ -129,7 +154,8 @@ export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInpu
         const cleanInput = {
             callId: String(input.callId || ''),
             leadId: String(input.leadId || ''),
-            leadAuthor: String(input.leadAuthor || '')
+            leadAuthor: String(input.leadAuthor || ''),
+            provider: input.provider ? String(input.provider) : undefined,
         };
         const result = await getCallTranscriptByCallIdFlow(cleanInput);
         return result ?? { transcriptFound: false, error: 'No response returned from server.' };
@@ -137,7 +163,7 @@ export async function getCallTranscriptByCallId(input: GetTranscriptByCallIdInpu
         console.error("Error in getCallTranscriptByCallId Server Action:", error);
         return {
             transcriptFound: false,
-            error: error?.message || 'Failed to fetch transcript from AirCall.'
+            error: error?.message || 'Failed to fetch call transcript.'
         };
     }
 }

@@ -1854,7 +1854,10 @@ export default function LeadsClientPage({
       notes: `Initiated call to ${phoneNumber} via ${providerLabel} app.`,
       author: user?.displayName || 'Unknown',
       email: user?.email || undefined,
-      aircallStatus: 'initiated'
+      telephonyProvider: provider,
+      telephonyStatus: 'initiated',
+      aircallStatus: provider === 'aircall' ? 'initiated' : undefined,
+      phoneNumber,
     });
     toast({
         title: `Opening ${providerLabel}`,

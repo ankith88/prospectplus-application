@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import type { ServiceSelection } from '@/lib/types';
+import { calculateMonthlyValue } from '@/lib/mrr';
 
 export const dynamic = 'force-dynamic';
 
@@ -224,10 +225,14 @@ async function handleUpdateServices(
   }
 
   const now = new Date().toISOString();
+  const calculatedMrr = calculateMonthlyValue({ services: finalServices, customerStatus: 'Won' }, true);
 
   // Update target company document
   await companyRef.update({
     services: finalServices,
+    monthlyValue: calculatedMrr,
+    mrr: calculatedMrr,
+    estimatedMrr: calculatedMrr,
     updatedAt: FieldValue.serverTimestamp()
   });
 
@@ -238,6 +243,9 @@ async function handleUpdateServices(
     if (matchingCompanySnap.exists) {
       await matchingCompanyRef.update({
         services: finalServices,
+        monthlyValue: calculatedMrr,
+        mrr: calculatedMrr,
+        estimatedMrr: calculatedMrr,
         updatedAt: FieldValue.serverTimestamp()
       });
     }
@@ -248,6 +256,9 @@ async function handleUpdateServices(
     if (matchingLeadSnap.exists) {
       await matchingLeadRef.update({
         services: finalServices,
+        monthlyValue: calculatedMrr,
+        mrr: calculatedMrr,
+        estimatedMrr: calculatedMrr,
         updatedAt: FieldValue.serverTimestamp()
       });
     }

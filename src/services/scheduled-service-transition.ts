@@ -1,5 +1,6 @@
 import { adminDb } from '@/services/firebase-server';
 import { syncPmpoToLocalMileServer } from '@/services/localmile-sync-server';
+import { calculateMonthlyValue } from '@/lib/mrr';
 
 /**
  * Scans companies and leads collections for due scheduledServiceChange entries
@@ -37,8 +38,16 @@ export async function processScheduledServiceChanges(): Promise<{
             // Archive current live services before promoting new services
             const currentServices = data.services || [];
             const currentHistory = data.serviceHistory || [];
+            const newMrr = typeof sched.monthlyValue === 'number' && sched.monthlyValue > 0
+              ? sched.monthlyValue
+              : calculateMonthlyValue({ services: sched.services, customerStatus: 'Won' }, true);
+
             const updates: any = {
               services: sched.services,
+              monthlyValue: newMrr,
+              mrr: newMrr,
+              estimatedMrr: newMrr,
+              lastServiceChangeDate: nowStr,
               scheduledServiceChange: null,
               updatedAt: nowStr
             };

@@ -81,10 +81,20 @@ export function calculateMonthlyValue(lead: Lead | any, ignoreStatusCheck: boole
 
       if (typeof freq === 'string') {
         const lower = freq.trim().toLowerCase();
-        if (lower === 'daily' || lower === '5 days' || lower === '5 days/week') {
+        const digitMatch = lower.match(/\b([1-7])\s*days?\b/) || lower.match(/^([1-7])\s*days?(\s*\/\s*week)?$/);
+        if (digitMatch) {
+          const daysCount = parseInt(digitMatch[1], 10);
+          totalMonthlyValue += rate * daysCount * 4.33;
+        } else if (lower === 'daily' || lower.includes('5 day')) {
           totalMonthlyValue += rate * 5 * 4.33;
-        } else if (lower === 'weekly' || lower === '1 day' || lower === '1 day/week') {
+        } else if (lower === 'weekly' || lower.includes('1 day')) {
           totalMonthlyValue += rate * 1 * 4.33;
+        } else if (lower.includes('3 day')) {
+          totalMonthlyValue += rate * 3 * 4.33;
+        } else if (lower.includes('2 day')) {
+          totalMonthlyValue += rate * 2 * 4.33;
+        } else if (lower.includes('4 day')) {
+          totalMonthlyValue += rate * 4 * 4.33;
         } else if (lower === 'fortnightly' || lower === 'bi-weekly') {
           totalMonthlyValue += rate * 0.5 * 4.33;
         } else if (lower === 'monthly') {

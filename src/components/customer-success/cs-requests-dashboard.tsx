@@ -46,10 +46,82 @@ import {
   Plus,
   Paperclip,
   TrendingUp,
-  Mail
+  Mail,
+  ArrowUpRight,
+  ArrowDownRight,
+  Equal,
+  Info,
+  Zap
 } from 'lucide-react';
 
 const REASONS = ['Price too high', 'Competitor offer', 'Service Quality issues', 'No longer needed', 'Business closed', 'Other'];
+
+export const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
+export type DayOfWeek = typeof DAYS_OF_WEEK[number];
+
+export const COMMON_SERVICES = [
+  'AMPO',
+  'PMPO',
+  'EB',
+  'CB',
+  'Parcel Pickup',
+  'Express Lodgement',
+  'Weekly Banking',
+  'Mail Delivery',
+];
+
+export const parseFrequencyDays = (freq: any): DayOfWeek[] => {
+  if (Array.isArray(freq)) {
+    return freq.filter((d): d is DayOfWeek => DAYS_OF_WEEK.includes(d as any));
+  }
+  if (typeof freq === 'string') {
+    if (freq === 'Adhoc') return [];
+    if (freq.includes('5') || freq.toLowerCase() === 'daily') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    if (freq.includes('3')) return ['Mon', 'Wed', 'Fri'];
+    if (freq.includes('2')) return ['Tue', 'Thu'];
+    if (freq.includes('1')) return ['Mon'];
+    if (freq.includes('4')) return ['Mon', 'Tue', 'Wed', 'Thu'];
+    if (freq.includes(',')) {
+      const parts = freq.split(',').map(s => s.trim());
+      return parts.filter((d): d is DayOfWeek => DAYS_OF_WEEK.includes(d as any));
+    }
+    if (DAYS_OF_WEEK.includes(freq as any)) return [freq as DayOfWeek];
+  }
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+};
+
+export const calculateServiceMonthlyCost = (rate: number, frequency: any): number => {
+  if (!rate || isNaN(rate)) return 0;
+  if (frequency === 'Adhoc') return Math.round(rate * 1 * 100) / 100;
+  const days = parseFrequencyDays(frequency);
+  if (days.length === 0) return Math.round(rate * 1 * 100) / 100;
+  return Math.round(rate * days.length * 4.33 * 100) / 100;
+};
+
+export const calculateTotalMRR = (services: ServiceSelection[]): number => {
+  if (!services || !Array.isArray(services)) return 0;
+  const total = services.reduce((sum, srv) => {
+    const rate = typeof srv.rate === 'number' ? srv.rate : parseFloat(String(srv.rate || 0)) || 0;
+    return sum + calculateServiceMonthlyCost(rate, srv.frequency);
+  }, 0);
+  return Math.round(total * 100) / 100;
+};
+
+export const normalizeInitialServices = (services: ServiceSelection[]): ServiceSelection[] => {
+  if (!services || !Array.isArray(services)) return [];
+  return services.map(s => {
+    const rateNum = typeof s.rate === 'number' ? s.rate : parseFloat(String(s.rate || 0)) || 0;
+    if (s.frequency === 'Adhoc') {
+      return { ...s, frequency: 'Adhoc', rate: rateNum };
+    }
+    const days = parseFrequencyDays(s.frequency);
+    return {
+      ...s,
+      frequency: days.length > 0 ? days : 'Adhoc',
+      rate: rateNum
+    };
+  });
+};
 
 export default function CSRequestsDashboard() {
   const { userProfile } = useAuth();
@@ -85,6 +157,109 @@ export default function CSRequestsDashboard() {
   // Processing States for Service Change
   const [editServices, setEditServices] = useState<ServiceSelection[]>([]);
   const [serviceChangeNotes, setServiceChangeNotes] = useState('');
+  const [selectedServiceToAdd, setSelectedServiceToAdd] = useState<string>('');
+  const [customServiceName, setCustomServiceName] = useState<string>('');
+  const [isAddingCustomService, setIsAddingCustomService] = useState<boolean>(false);
+
+  // Custom Day Toggle for Service Frequency
+  const handleToggleServiceDay = (index: number, day: DayOfWeek) => {
+    const updated = [...editServices];
+    const target = { ...updated[index] };
+    const currentDays = parseFrequencyDays(target.frequency);
+    let nextDays: DayOfWeek[];
+    if (target.frequency === 'Adhoc') {
+      nextDays = [day];
+    } else if (currentDays.includes(day)) {
+      nextDays = currentDays.filter(d => d !== day);
+    } else {
+      nextDays = DAYS_OF_WEEK.filter(d => currentDays.includes(d) || d === day);
+    }
+    target.frequency = nextDays.length === 0 ? 'Adhoc' : nextDays;
+    updated[index] = target;
+    setEditServices(updated);
+  };
+
+  const handleSetAllDays = (index: number) => {
+    const updated = [...editServices];
+    updated[index] = { ...updated[index], frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] };
+    setEditServices(updated);
+  };
+
+  const handleSetAdhoc = (index: number) => {
+    const updated = [...editServices];
+    updated[index] = { ...updated[index], frequency: 'Adhoc' };
+    setEditServices(updated);
+  };
+
+  const handleAddService = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setEditServices(prev => [
+      ...prev,
+      {
+        name: trimmed,
+        frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+        rate: 14.50,
+      }
+    ]);
+    setSelectedServiceToAdd('');
+    setCustomServiceName('');
+    setIsAddingCustomService(false);
+  };
+
+  // Live MRR Computations
+  const baselineMRR = useMemo(() => {
+    if (!selectedRequest) return 0;
+    if (typeof selectedRequest.originalMRR === 'number' && selectedRequest.originalMRR > 0) {
+      return selectedRequest.originalMRR;
+    }
+    const orig = selectedRequest.originalServices && selectedRequest.originalServices.length > 0 
+      ? selectedRequest.originalServices 
+      : selectedRequest.requestedServices || [];
+    return calculateTotalMRR(orig);
+  }, [selectedRequest]);
+
+  const newMRR = useMemo(() => {
+    return calculateTotalMRR(editServices);
+  }, [editServices]);
+
+  const mrrDelta = useMemo(() => {
+    return Math.round((newMRR - baselineMRR) * 100) / 100;
+  }, [newMRR, baselineMRR]);
+
+  const changeAnalysis = useMemo(() => {
+    if (!selectedRequest) return { rateChanged: false, freqChanged: false, added: false, deleted: false };
+    const orig = selectedRequest.originalServices || [];
+    const origNames = orig.map(s => s.name.trim().toLowerCase());
+    const newNames = editServices.map(s => s.name.trim().toLowerCase());
+
+    const added = newNames.some(name => !origNames.includes(name));
+    const deleted = origNames.some(name => !newNames.includes(name));
+
+    let rateChanged = false;
+    let freqChanged = false;
+
+    for (const ns of editServices) {
+      const match = orig.find(os => os.name.trim().toLowerCase() === ns.name.trim().toLowerCase());
+      if (match) {
+        if (Number(match.rate || 0) !== Number(ns.rate || 0)) {
+          rateChanged = true;
+        }
+        const oDays = parseFrequencyDays(match.frequency).sort().join(',');
+        const nDays = parseFrequencyDays(ns.frequency).sort().join(',');
+        const oAdhoc = match.frequency === 'Adhoc';
+        const nAdhoc = ns.frequency === 'Adhoc';
+        if (oDays !== nDays || oAdhoc !== nAdhoc) {
+          freqChanged = true;
+        }
+      }
+    }
+
+    return { rateChanged, freqChanged, added, deleted };
+  }, [selectedRequest, editServices]);
+
+  // Processing States for Service Change
+  const [serviceEffectiveDate, setServiceEffectiveDate] = useState<string>('');
 
   // Processing States for Cancellation
   const [cancelSaveStrategy, setCancelSaveStrategy] = useState<RetentionStrategy>('Keep Existing Services & Pricing');
@@ -381,8 +556,13 @@ export default function CSRequestsDashboard() {
 
   const handleOpenProcess = (req: CSRequest) => {
     setSelectedRequest(req);
-    setEditServices(JSON.parse(JSON.stringify(req.requestedServices || req.originalServices || [])));
+    setEditServices(normalizeInitialServices(req.requestedServices || req.originalServices || []));
     setServiceChangeNotes(req.notes || '');
+    setSelectedServiceToAdd('');
+    setCustomServiceName('');
+    setIsAddingCustomService(false);
+    const initialEffDate = req.effectiveDate || req.requestedDate?.substring(0, 10) || new Date().toISOString().substring(0, 10);
+    setServiceEffectiveDate(initialEffDate);
 
     setCancelSaveStrategy('Keep Existing Services & Pricing');
     setCancelSavedDate(new Date().toISOString().substring(0, 10));
@@ -538,6 +718,10 @@ export default function CSRequestsDashboard() {
       const userDisplayName = userProfile?.displayName || userProfile?.email || 'Customer Success Rep';
       const processedAt = new Date().toISOString();
 
+      const todayStr = processedAt.substring(0, 10);
+      const targetEffectiveDate = (serviceEffectiveDate || selectedRequest.effectiveDate || todayStr).trim();
+      const isFutureDated = targetEffectiveDate > todayStr;
+
       if (newStatus === 'Completed') {
         const compRef = doc(firestore, 'companies', selectedRequest.leadId);
         const leadRef = doc(firestore, 'leads', selectedRequest.leadId);
@@ -546,35 +730,146 @@ export default function CSRequestsDashboard() {
           getDoc(leadRef)
         ]);
 
-        const updates = {
-          services: editServices,
-          serviceChangeRequested: false,
-          customerStatus: 'Won'
-        };
+        const existingData = compSnap.exists() ? compSnap.data() : (leadSnap.exists() ? leadSnap.data() : null);
+        const originalServices: ServiceSelection[] = selectedRequest.originalServices || existingData?.services || [];
+        const existingMonthlyValue = typeof existingData?.monthlyValue === 'number' && existingData.monthlyValue > 0 
+          ? existingData.monthlyValue 
+          : (typeof existingData?.mrr === 'number' && existingData.mrr > 0 ? existingData.mrr : 0);
+        
+        const effectiveBaselineMRR = selectedRequest.originalMRR ?? (
+          existingMonthlyValue > 0 ? existingMonthlyValue : calculateTotalMRR(originalServices)
+        );
+        const calculatedNewMRR = calculateTotalMRR(editServices);
+        const calculatedDelta = Math.round((calculatedNewMRR - effectiveBaselineMRR) * 100) / 100;
+        const deltaFormatted = calculatedDelta >= 0 ? `+$${calculatedDelta.toFixed(2)}` : `-$${Math.abs(calculatedDelta).toFixed(2)}`;
 
-        if (compSnap.exists()) {
-          await updateDoc(compRef, updates);
+        if (isFutureDated) {
+          // Future-dated: Stage under scheduledServiceChange.
+          // Current live services, rates, and MRR remain untouched today.
+          // The daily transition cron (/api/cron/process-scheduled-service-changes) will promote them on targetEffectiveDate.
+          const scheduledPayload = {
+            services: editServices,
+            monthlyValue: calculatedNewMRR,
+            mrr: calculatedNewMRR,
+            effectiveDate: targetEffectiveDate,
+            requestedAt: processedAt,
+            processedBy: userDisplayName,
+            notes: serviceChangeNotes,
+            mrrDelta: calculatedDelta,
+            originalMRR: effectiveBaselineMRR,
+          };
+
+          const updates: any = {
+            scheduledServiceChange: scheduledPayload,
+            serviceChangeRequested: false,
+            updatedAt: processedAt,
+          };
+
+          if (compSnap.exists()) {
+            await updateDoc(compRef, updates);
+          }
+          if (leadSnap.exists()) {
+            await updateDoc(leadRef, updates);
+          }
+
+          // Update cs_requests document
+          await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
+            status: 'Completed',
+            updatedServices: editServices,
+            originalMRR: effectiveBaselineMRR,
+            newMRR: calculatedNewMRR,
+            savedMRR: calculatedNewMRR,
+            mrrDelta: calculatedDelta,
+            effectiveDate: targetEffectiveDate,
+            isScheduledFuture: true,
+            serviceRateChanged: changeAnalysis.rateChanged,
+            serviceFrequencyChanged: changeAnalysis.freqChanged,
+            serviceAdded: changeAnalysis.added,
+            serviceDeleted: changeAnalysis.deleted,
+            notes: serviceChangeNotes ? `${selectedRequest.notes || ''}\n[Scheduled for ${targetEffectiveDate}]: ${serviceChangeNotes}` : selectedRequest.notes,
+            processedBy: userDisplayName,
+            processedAt,
+          });
+
+          // Log activity
+          await logActivity(selectedRequest.leadId, {
+            type: 'Update',
+            date: processedAt,
+            notes: `Change of Service Request processed by ${userDisplayName}.\nEffective Date: ${targetEffectiveDate} (Future Scheduled Transition).\nCurrent services and MRR ($${effectiveBaselineMRR.toFixed(2)}/mo) remain active today.\nRates will automatically transition on ${targetEffectiveDate} to new MRR: $${calculatedNewMRR.toFixed(2)} (${deltaFormatted}/mo).`,
+            author: userDisplayName,
+          }, compSnap.exists() ? 'companies' : 'leads');
+
+          toast({
+            title: 'Service Change Scheduled for Future',
+            description: `Rates and MRR ($${calculatedNewMRR.toFixed(2)}/mo) will take effect automatically on ${targetEffectiveDate}. Current MRR ($${effectiveBaselineMRR.toFixed(2)}/mo) remains active until then.`,
+          });
+        } else {
+          // Immediate or Back-Dated: Update live services, rates, and MRR immediately.
+          const previousHistory = existingData?.serviceHistory || [];
+          const historyRecord = {
+            services: originalServices,
+            replacedAt: processedAt,
+            replacedBy: userDisplayName,
+            reason: serviceChangeNotes ? `Service Change: ${serviceChangeNotes}` : 'Change of Service completed in CS Requests',
+            source: 'Direct Staff Adjustment (No SF Sent)',
+            previousMRR: effectiveBaselineMRR,
+            newMRR: calculatedNewMRR,
+            mrrDelta: calculatedDelta,
+            effectiveDate: targetEffectiveDate,
+          };
+
+          const updates: any = {
+            services: editServices,
+            monthlyValue: calculatedNewMRR,
+            mrr: calculatedNewMRR,
+            estimatedMrr: calculatedNewMRR,
+            serviceChangeRequested: false,
+            scheduledServiceChange: null,
+            lastServiceChangeDate: processedAt,
+            customerStatus: 'Won',
+            serviceHistory: [historyRecord, ...previousHistory],
+            updatedAt: processedAt,
+          };
+
+          if (compSnap.exists()) {
+            await updateDoc(compRef, updates);
+          }
+          if (leadSnap.exists()) {
+            await updateDoc(leadRef, updates);
+          }
+
+          // Update cs_requests document
+          await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
+            status: 'Completed',
+            updatedServices: editServices,
+            originalMRR: effectiveBaselineMRR,
+            newMRR: calculatedNewMRR,
+            savedMRR: calculatedNewMRR,
+            mrrDelta: calculatedDelta,
+            effectiveDate: targetEffectiveDate,
+            isScheduledFuture: false,
+            serviceRateChanged: changeAnalysis.rateChanged,
+            serviceFrequencyChanged: changeAnalysis.freqChanged,
+            serviceAdded: changeAnalysis.added,
+            serviceDeleted: changeAnalysis.deleted,
+            notes: serviceChangeNotes ? `${selectedRequest.notes || ''}\n[Resolution]: ${serviceChangeNotes}` : selectedRequest.notes,
+            processedBy: userDisplayName,
+            processedAt,
+          });
+
+          // Log activity
+          await logActivity(selectedRequest.leadId, {
+            type: 'Update',
+            date: processedAt,
+            notes: `Change of Service Request completed by ${userDisplayName}.\nEffective Date: ${targetEffectiveDate} (${targetEffectiveDate < todayStr ? 'Back-Dated' : 'Today'} - Applied Immediately).\nMRR updated: $${effectiveBaselineMRR.toFixed(2)} → $${calculatedNewMRR.toFixed(2)} (${deltaFormatted}/mo).\nActive services count: ${editServices.length}`,
+            author: userDisplayName,
+          }, compSnap.exists() ? 'companies' : 'leads');
+
+          toast({
+            title: 'Service Change Completed',
+            description: `Services and MRR ($${calculatedNewMRR.toFixed(2)}/mo) updated immediately (Effective: ${targetEffectiveDate}).${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
+          });
         }
-        if (leadSnap.exists()) {
-          await updateDoc(leadRef, updates);
-        }
-
-        // Update cs_requests document
-        await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
-          status: 'Completed',
-          updatedServices: editServices,
-          notes: serviceChangeNotes ? `${selectedRequest.notes || ''}\n[Resolution]: ${serviceChangeNotes}` : selectedRequest.notes,
-          processedBy: userDisplayName,
-          processedAt,
-        });
-
-        // Log activity
-        await logActivity(selectedRequest.leadId, {
-          type: 'Update',
-          date: processedAt,
-          notes: `Change of Service Request completed by ${userDisplayName}.\nUpdated active services count: ${editServices.length}`,
-          author: userDisplayName,
-        }, compSnap.exists() ? 'companies' : 'leads');
 
         // Trigger automated Service Change Email Notification if enabled
         if (sendNotificationEmail && emailTo.trim()) {
@@ -588,8 +883,12 @@ export default function CSRequestsDashboard() {
                 leadId: selectedRequest.leadId,
                 companyName: selectedRequest.companyName,
                 services: editServices,
+                originalMRR: effectiveBaselineMRR,
+                newMRR: calculatedNewMRR,
+                mrrDelta: calculatedDelta,
                 serviceChangeNotes,
-                effectiveDate: (selectedRequest as any).effectiveDate || new Date().toISOString().split('T')[0],
+                effectiveDate: targetEffectiveDate,
+                isFutureDated,
                 processedBy: userDisplayName,
                 processedByEmail: userProfile?.email || '',
                 customFrom: userProfile?.email ? `${userDisplayName} <${userProfile.email}>` : undefined,
@@ -599,11 +898,6 @@ export default function CSRequestsDashboard() {
             })
           }).catch(emailErr => console.error("[CS Requests] Error sending service change email:", emailErr));
         }
-
-        toast({
-          title: 'Service Change Completed',
-          description: `Services updated for ${selectedRequest.companyName}.${sendNotificationEmail && emailTo.trim() ? ` Notification sent to ${emailTo.trim()}.` : ''}`,
-        });
       } else {
         // Dismiss / Cancel request
         await updateDoc(doc(firestore, 'cs_requests', selectedRequest.id), {
@@ -1157,7 +1451,14 @@ export default function CSRequestsDashboard() {
                             )}
                           </div>
                           {req.effectiveDate && (
-                            <div className="text-[10px] text-slate-400">Eff: {req.effectiveDate}</div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[10px] text-slate-400">Eff: {req.effectiveDate}</span>
+                              {(req as any).isScheduledFuture && req.status === 'Completed' && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-100 text-amber-800">
+                                  Future Scheduled
+                                </span>
+                              )}
+                            </div>
                           )}
                           {req.cancellationDate && !isServiceChange && (
                             <div className="text-[10px] text-rose-500 font-medium">Stop: {req.cancellationDate}</div>
@@ -1341,68 +1642,358 @@ export default function CSRequestsDashboard() {
               {selectedRequest.requestType === 'change_of_service' && (
                 <div className="space-y-4">
                   
-                  <Label className="text-sm font-bold text-slate-900 block">
-                    Update Company Active Services
-                  </Label>
+                  {/* Live MRR Impact & Variance Card */}
+                  <div className="p-3.5 rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50/70 via-white to-emerald-50/50 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <DollarSign className="w-4 h-4 text-[#095c7b]" />
+                        <span className="text-xs font-bold text-slate-800">Monthly Recurring Revenue (MRR) Impact</span>
+                      </div>
+                      <Badge 
+                        variant="outline"
+                        className={`text-[11px] font-bold px-2 py-0.5 border ${
+                          mrrDelta > 0 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                            : mrrDelta < 0 
+                              ? 'bg-rose-50 text-rose-700 border-rose-300' 
+                              : 'bg-slate-50 text-slate-700 border-slate-300'
+                        }`}
+                      >
+                        {mrrDelta > 0 ? (
+                          <span className="flex items-center gap-0.5"><ArrowUpRight className="w-3.5 h-3.5" /> +${mrrDelta.toFixed(2)}/mo Expansion</span>
+                        ) : mrrDelta < 0 ? (
+                          <span className="flex items-center gap-0.5"><ArrowDownRight className="w-3.5 h-3.5" /> -${Math.abs(mrrDelta).toFixed(2)}/mo Contraction</span>
+                        ) : (
+                          <span className="flex items-center gap-0.5"><Equal className="w-3.5 h-3.5" /> No MRR Change</span>
+                        )}
+                      </Badge>
+                    </div>
 
+                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100 text-center">
+                      <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block font-medium">Previous / Baseline</span>
+                        <span className="text-sm font-bold text-slate-700">${baselineMRR.toFixed(2)}<span className="text-[10px] font-normal text-slate-400">/mo</span></span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-white/80 border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block font-medium">Updated Rate & Schedule</span>
+                        <span className="text-sm font-bold text-[#095c7b]">${newMRR.toFixed(2)}<span className="text-[10px] font-normal text-slate-400">/mo</span></span>
+                      </div>
+                      <div className={`p-2 rounded-lg border ${
+                        mrrDelta > 0 
+                          ? 'bg-emerald-50/50 border-emerald-200' 
+                          : mrrDelta < 0 
+                            ? 'bg-rose-50/50 border-rose-200' 
+                            : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        <span className="text-[10px] text-slate-500 block font-medium">Net Variance</span>
+                        <span className={`text-sm font-bold ${
+                          mrrDelta > 0 ? 'text-emerald-700' : mrrDelta < 0 ? 'text-rose-700' : 'text-slate-700'
+                        }`}>
+                          {mrrDelta >= 0 ? `+$${mrrDelta.toFixed(2)}` : `-$${Math.abs(mrrDelta).toFixed(2)}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Change Indicator Badges */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] text-slate-400 font-medium">Detected Changes:</span>
+                      {changeAnalysis.rateChanged && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">
+                          Rate Adjustment
+                        </span>
+                      )}
+                      {changeAnalysis.freqChanged && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-800">
+                          Schedule / Days Changed
+                        </span>
+                      )}
+                      {changeAnalysis.added && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                          New Service Added
+                        </span>
+                      )}
+                      {changeAnalysis.deleted && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800">
+                          Service Removed
+                        </span>
+                      )}
+                      {!changeAnalysis.rateChanged && !changeAnalysis.freqChanged && !changeAnalysis.added && !changeAnalysis.deleted && (
+                        <span className="text-[10px] text-slate-400 italic">No modifications detected yet</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Direct Update (No SF Sent) Notice */}
+                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 flex items-start gap-2 text-xs">
+                    <Info className="w-4 h-4 text-[#095c7b] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-slate-800">Direct CRM Update (No SF Required): </span>
+                      Applying changes here directly recalculates and commits the updated MRR and active service schedules to the company and lead profile without waiting for a re-signed Service Confirmation Form.
+                    </div>
+                  </div>
+
+                  {/* Header & Services List */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-bold text-slate-900 block">
+                        Update Company Active Services ({editServices.length})
+                      </Label>
+                      <span className="text-[11px] text-slate-500">
+                        Select specific days of the week for each service or toggle Adhoc
+                      </span>
+                    </div>
+
+                    {/* Add Service Trigger */}
+                    {!isAddingCustomService && (
+                      <div className="flex items-center gap-1.5">
+                        <Select
+                          value={selectedServiceToAdd}
+                          onValueChange={(val) => {
+                            if (val === '__custom__') {
+                              setIsAddingCustomService(true);
+                            } else {
+                              handleAddService(val);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-7 text-xs bg-white border-dashed border-[#095c7b] text-[#095c7b] hover:bg-sky-50 px-2.5 font-semibold">
+                            <Plus className="w-3.5 h-3.5 mr-1" />
+                            <span>Add Service</span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COMMON_SERVICES.filter(cs => !editServices.some(es => es.name.toLowerCase() === cs.toLowerCase())).map((name) => (
+                              <SelectItem key={name} value={name} className="text-xs">
+                                + {name}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__custom__" className="text-xs text-sky-600 font-semibold border-t">
+                              + Custom Service Name...
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Custom Service Name Input Box */}
+                  {isAddingCustomService && (
+                    <div className="p-3 rounded-lg border border-sky-200 bg-sky-50/60 flex items-center gap-2">
+                      <Input
+                        type="text"
+                        placeholder="Enter service name (e.g. Daily Document Collection)"
+                        value={customServiceName}
+                        onChange={(e) => setCustomServiceName(e.target.value)}
+                        className="h-8 text-xs bg-white flex-1"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddService(customServiceName);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleAddService(customServiceName)}
+                        disabled={!customServiceName.trim()}
+                        className="h-8 text-xs bg-[#095c7b] hover:bg-[#07475f] text-white px-3 font-semibold"
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIsAddingCustomService(false);
+                          setCustomServiceName('');
+                        }}
+                        className="h-8 text-xs text-slate-500 hover:text-slate-800"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Service Cards */}
                   <div className="space-y-3">
-                    {editServices.map((srv, idx) => (
-                      <div key={srv.id || idx} className="p-3 rounded-lg border border-slate-200 bg-white space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-slate-800">{srv.name}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditServices(editServices.filter((_, i) => i !== idx))}
-                            className="text-rose-600 hover:bg-rose-50 h-7 px-2 text-[11px]"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 mr-1" />
-                            Remove
-                          </Button>
-                        </div>
+                    {editServices.length === 0 ? (
+                      <div className="p-6 rounded-xl border border-dashed border-slate-300 text-center text-slate-400 text-xs">
+                        No active services remaining. Click &quot;Add Service&quot; above to add one.
+                      </div>
+                    ) : (
+                      editServices.map((srv, idx) => {
+                        const currentDays = parseFrequencyDays(srv.frequency);
+                        const isAdhoc = srv.frequency === 'Adhoc';
+                        const serviceMonthlyCost = calculateServiceMonthlyCost(srv.rate || 0, srv.frequency);
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-[11px] text-slate-500 mb-1 block">Frequency</Label>
-                            <Select
-                              value={typeof srv.frequency === 'string' ? srv.frequency : '5 Days / Week'}
-                              onValueChange={(val) => {
-                                const updated = [...editServices];
-                                updated[idx].frequency = val;
-                                setEditServices(updated);
-                              }}
-                            >
-                              <SelectTrigger className="h-8 text-xs bg-white">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="5 Days / Week">5 Days / Week</SelectItem>
-                                <SelectItem value="3 Days / Week">3 Days / Week</SelectItem>
-                                <SelectItem value="2 Days / Week">2 Days / Week</SelectItem>
-                                <SelectItem value="1 Day / Week">1 Day / Week</SelectItem>
-                                <SelectItem value="Adhoc">Adhoc</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                        return (
+                          <div key={srv.id || idx} className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-3 hover:border-slate-300 transition-all shadow-sm">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+                                  {srv.name}
+                                </span>
+                                <span className="text-[11px] font-semibold text-[#095c7b]">
+                                  Est. ${serviceMonthlyCost.toFixed(2)}/mo
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditServices(editServices.filter((_, i) => i !== idx))}
+                                className="text-rose-600 hover:bg-rose-50 h-7 px-2 text-[11px]"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                Remove
+                              </Button>
+                            </div>
 
-                          <div>
-                            <Label className="text-[11px] text-slate-500 mb-1 block">Rate ($)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={srv.rate || 0}
-                              onChange={(e) => {
-                                const updated = [...editServices];
-                                updated[idx].rate = parseFloat(e.target.value) || 0;
-                                setEditServices(updated);
-                              }}
-                              className="h-8 text-xs font-semibold"
-                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                              {/* Custom Days of Week Selector */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <Label className="text-[11px] font-semibold text-slate-600">
+                                    Schedule / Active Days
+                                  </Label>
+                                  <span className="text-[10px] font-medium text-slate-500">
+                                    {isAdhoc ? 'Adhoc / On Demand' : `${currentDays.length} day${currentDays.length === 1 ? '' : 's'}/wk`}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {DAYS_OF_WEEK.map((day) => {
+                                    const isSelected = !isAdhoc && currentDays.includes(day);
+                                    return (
+                                      <button
+                                        key={day}
+                                        type="button"
+                                        onClick={() => handleToggleServiceDay(idx, day)}
+                                        className={`h-7 px-2.5 text-xs font-bold rounded-md transition-all ${
+                                          isSelected
+                                            ? 'bg-[#095c7b] text-white shadow-sm ring-1 ring-[#095c7b]'
+                                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200'
+                                        }`}
+                                        title={`Toggle ${day}day`}
+                                      >
+                                        {day}
+                                      </button>
+                                    );
+                                  })}
+
+                                  {/* Quick Select All Mon-Fri */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetAllDays(idx)}
+                                    className={`h-7 px-2 text-[10px] font-semibold rounded-md border transition-all ${
+                                      !isAdhoc && currentDays.length === 5
+                                        ? 'bg-sky-100 text-[#095c7b] border-sky-300 font-bold'
+                                        : 'bg-white text-slate-500 hover:bg-slate-100 border-slate-200'
+                                    }`}
+                                    title="Set all 5 days (Mon-Fri)"
+                                  >
+                                    All (M-F)
+                                  </button>
+
+                                  {/* Adhoc Mode Toggle */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetAdhoc(idx)}
+                                    className={`h-7 px-2 text-[10px] font-semibold rounded-md border transition-all ${
+                                      isAdhoc
+                                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm font-bold'
+                                        : 'bg-white text-slate-500 hover:bg-purple-50 hover:text-purple-700 border-slate-200'
+                                    }`}
+                                    title="Set as Adhoc / On Demand"
+                                  >
+                                    Adhoc
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Rate Input */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <Label className="text-[11px] font-semibold text-slate-600">
+                                    Rate ($ per service / visit)
+                                  </Label>
+                                  <span className="text-[10px] text-slate-400">
+                                    {isAdhoc ? '$Rate × 1' : '$Rate × Days × 4.33'}
+                                  </span>
+                                </div>
+
+                                <div className="relative">
+                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={srv.rate ?? 0}
+                                    onChange={(e) => {
+                                      const updated = [...editServices];
+                                      updated[idx].rate = parseFloat(e.target.value) || 0;
+                                      setEditServices(updated);
+                                    }}
+                                    className="h-8 pl-6 text-xs font-semibold bg-white"
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Effective Date & Update Timing Card */}
+                  <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                      <div>
+                        <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                          <Calendar className="w-3.5 h-3.5 text-[#095c7b]" />
+                          Effective Date * (Rate Start Date)
+                        </Label>
+                        <Input
+                          type="date"
+                          value={serviceEffectiveDate}
+                          onChange={(e) => setServiceEffectiveDate(e.target.value)}
+                          className="h-9 text-xs bg-white border-slate-300 font-medium"
+                        />
+                      </div>
+                      <div className="text-xs flex flex-col justify-center">
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Execution Schedule</span>
+                        {serviceEffectiveDate > new Date().toISOString().substring(0, 10) ? (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-100/90 text-amber-900 border border-amber-300 font-semibold text-[11.5px]">
+                            <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                            <span>Future Scheduled ({serviceEffectiveDate})</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-100/90 text-emerald-900 border border-emerald-300 font-semibold text-[11.5px]">
+                            <Zap className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span>{serviceEffectiveDate < new Date().toISOString().substring(0, 10) ? 'Back-Dated (Immediate Update)' : 'Effective Today (Immediate Update)'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Explanatory timing alert */}
+                    {serviceEffectiveDate > new Date().toISOString().substring(0, 10) ? (
+                      <div className="text-[11px] text-amber-800 bg-amber-50/90 p-2.5 rounded-lg border border-amber-200/80 leading-relaxed flex items-start gap-2">
+                        <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Scheduled for Future:</strong> The company's current active services and MRR will remain in place today. These new rates will be staged under scheduled service changes and promoted automatically on <strong>{serviceEffectiveDate}</strong> by the nightly transition engine.
                         </div>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="text-[11px] text-emerald-800 bg-emerald-50/90 p-2.5 rounded-lg border border-emerald-200/80 leading-relaxed flex items-start gap-2">
+                        <Zap className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Immediate Live Update:</strong> Because this effective date is {serviceEffectiveDate < new Date().toISOString().substring(0, 10) ? 'back-dated' : 'today'}, the new service rates, frequencies, and MRR (${newMRR.toFixed(2)}/mo) will take effect immediately in active CRM records and operational run sheets.
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>

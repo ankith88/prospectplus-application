@@ -294,7 +294,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
   }, [company.notes]);
 
   const sortedCalls = useMemo(() => {
-    const calls = (company.activity || []).filter(a => a.type === 'Call' || a.notes?.includes('Initiated call') || a.aircallStatus === 'initiated' || a.callId);
+    const calls = (company.activity || []).filter(a => a.type === 'Call' || a.notes?.includes('Initiated call') || a.aircallStatus === 'initiated' || a.telephonyStatus === 'initiated' || a.callId);
     return [...calls].sort((a, b) => {
       const timeA = new Date(a.date || (a as any).createdAt || 0).getTime();
       const timeB = new Date(b.date || (b as any).createdAt || 0).getTime();
@@ -1463,7 +1463,10 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
         notes: `Initiated call to ${phoneNumber} via ${providerLabel} app.`,
         author: user?.displayName || 'Unknown',
         email: user?.email || undefined,
-        aircallStatus: 'initiated'
+        telephonyProvider: provider,
+        telephonyStatus: 'initiated',
+        aircallStatus: provider === 'aircall' ? 'initiated' : undefined,
+        phoneNumber,
     }, 'companies');
   };
 
@@ -2745,7 +2748,7 @@ export function CompanyProfile({ initialCompany, onNoteLogged }: CompanyProfileP
                                             <p className="font-medium text-foreground">{call.notes}</p>
                                             <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground mt-0.5">
                                                 {call.author && <span>By: {call.author}</span>}
-                                                {call.callId && <span>• AirCall ID: <code className="bg-muted px-1 rounded font-mono text-[10px]">{call.callId}</code></span>}
+                                                {call.callId && <span>• {(call.telephonyProvider === 'dialpad' || call.notes?.toLowerCase().includes('dialpad')) ? 'Dialpad' : 'AirCall'} ID: <code className="bg-muted px-1 rounded font-mono text-[10px]">{call.callId}</code></span>}
                                                 {call.duration && <span>• Duration: {call.duration}</span>}
                                             </div>
                                         </div>

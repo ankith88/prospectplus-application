@@ -743,15 +743,54 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         }
     };
 
+    const [syncingDialpadActivityId, setSyncingDialpadActivityId] = useState<string | null>(null);
+
+    const handleSyncDialpadCall = async (activityId: string, targetPhone?: string) => {
+        try {
+            setSyncingDialpadActivityId(activityId);
+            toast({ title: "Checking Dialpad...", description: "Querying Dialpad API for call conclusion and details..." });
+            const res = await fetch('/api/dialpad/sync-call', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    leadId: lead.id,
+                    phoneNumber: targetPhone || lead.customerPhone || (lead as any).phone,
+                    activityId,
+                    collectionType: 'leads',
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast({ title: "Call Synced!", description: `Dialpad call ${data.callId || ''} attached and updated.` });
+                const updatedLead = await getLeadFromFirebase(lead.id, true);
+                if (updatedLead) setLead(updatedLead);
+            } else {
+                toast({
+                    variant: "destructive",
+                    title: "Dialpad Sync",
+                    description: data.message || "No concluded call found in Dialpad yet. If you are still on the call, try syncing again once hung up."
+                });
+            }
+        } catch (err: any) {
+            console.error("Error syncing Dialpad call:", err);
+            toast({ variant: "destructive", title: "Error", description: err.message || "Network error syncing call." });
+        } finally {
+            setSyncingDialpadActivityId(null);
+        }
+    };
+
     const handleGetTranscriptForCall = async (call: Activity) => {
         if (!call.callId || !user) return;
         const authorName = user.displayName || (userProfile ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : 'System');
+        const isDialpad = call.telephonyProvider === 'dialpad' || call.notes?.toLowerCase().includes('dialpad');
+        const provider = isDialpad ? 'dialpad' : 'aircall';
         setFetchingTranscriptId(call.callId);
         try {
             const result = await getCallTranscriptByCallId({
                 callId: String(call.callId),
                 leadId: lead.id,
-                leadAuthor: authorName
+                leadAuthor: authorName,
+                provider,
             });
 
             if (result?.transcriptFound) {
@@ -4238,7 +4277,10 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
         notes: `Initiated call to ${phoneNumber} via ${providerLabel} app.`,
         author: user?.displayName || 'Unknown',
         email: user?.email || undefined,
-        aircallStatus: 'initiated'
+        telephonyProvider: provider,
+        telephonyStatus: 'initiated',
+        aircallStatus: provider === 'aircall' ? 'initiated' : undefined,
+        phoneNumber,
     });
   };
 
@@ -8885,18 +8927,20 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     </CardHeader>
                     <CardContent className="pt-6 space-y-4">
                         {callHistory.map(call => {
-                            const recordingAssetUrl = call.recordingAssetUrl || (call.callId ? `https://assets.aircall.io/calls/${call.callId}/recording/info` : undefined);
+                            const isDialpadCall = call.telephonyProvider === 'dialpad' || call.notes?.toLowerCase().includes('dialpad');
+                            const recordingAssetUrl = call.recordingAssetUrl || call.recordingUrl || (call as any).recording || (!isDialpadCall && call.callId ? `https://assets.aircall.io/calls/${call.callId}/recording/info` : undefined);
+                            const callStatus = call.telephonyStatus || call.aircallStatus || (call as any).status;
                             return (
                                 <div key={call.id} className="text-sm border-b pb-3 last:border-b-0 space-y-2">
                                     <div className="flex justify-between items-start gap-4">
                                         <div>
                                             <p className="font-medium text-foreground">{cleanCallNotes(call.notes)}</p>
                                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
-                                                <span>AirCall ID: <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-[10px]">{call.callId}</code></span>
+                                                <span>{isDialpadCall ? 'Dialpad' : 'AirCall'} ID: <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-[10px]">{call.callId}</code></span>
                                                 <span>Duration: {call.duration || '0s'}</span>
-                                                {call.aircallStatus && (
+                                                {callStatus && (
                                                     <span className="capitalize font-normal text-muted-foreground">
-                                                        Status: <span className="font-medium text-foreground">{call.aircallStatus}</span>
+                                                        Status: <span className="font-medium text-foreground">{callStatus}</span>
                                                     </span>
                                                 )}
                                                 {call.event && (
@@ -8973,25 +9017,47 @@ export function LeadProfile({ initialLead }: LeadProfileProps) {
                     <CardContent className="pt-6 space-y-2">
                         {sortedActivities.map(a => {
                             const isCall = a.type === 'Call' && a.callId;
-                            const recordingAssetUrl = a.recordingAssetUrl || (a.callId ? `https://assets.aircall.io/calls/${a.callId}/recording/info` : undefined);
+                            const isDialpadAct = a.telephonyProvider === 'dialpad' || a.notes?.toLowerCase().includes('dialpad');
+                            const recordingAssetUrl = a.recordingAssetUrl || a.recordingUrl || (a as any).recording || (!isDialpadAct && a.callId ? `https://assets.aircall.io/calls/${a.callId}/recording/info` : undefined);
+                            const isInitiated = a.type === 'Call' && !a.callId && (a.notes?.includes('Initiated call') || a.aircallStatus === 'initiated' || a.telephonyStatus === 'initiated');
                             return (
                                 <div key={a.id} className="text-xs flex flex-col sm:flex-row sm:justify-between border-b pb-2 last:border-b-0 gap-1 sm:gap-4">
                                     <div className="flex flex-col gap-0.5">
                                         <span className="font-medium text-foreground">{a.type === 'Call' ? cleanCallNotes(a.notes) : a.notes}</span>
                                         <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground mt-0.5">
                                             {a.author && <span>Performed by: {a.author}</span>}
-                                            {a.type === 'Call' && !a.callId && (a.notes?.includes('Initiated call') || a.aircallStatus === 'initiated') && (
+                                            {isInitiated && (
                                                 <>
                                                     <span>•</span>
-                                                    <span className="inline-flex items-center text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded" title="Call initiated client-side; awaiting AirCall webhook completion to attach Call ID">
-                                                        Initiated via AirCall (Pending Webhook Sync)
+                                                    <span
+                                                        className={`inline-flex items-center text-[9px] font-medium px-1.5 py-0.5 rounded border ${isDialpadAct ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+                                                        title={`Call initiated client-side; awaiting ${isDialpadAct ? 'Dialpad' : 'AirCall'} webhook completion to attach Call ID`}
+                                                    >
+                                                        Initiated via {isDialpadAct ? 'Dialpad' : 'AirCall'} (Pending Webhook Sync)
                                                     </span>
+                                                    {isDialpadAct && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-5 px-1.5 text-[10px] text-purple-700 hover:text-purple-800 hover:bg-purple-100/60 font-medium inline-flex items-center gap-1 ml-0.5"
+                                                            onClick={() => handleSyncDialpadCall(a.id, a.phoneNumber || lead.customerPhone || (lead as any).phone)}
+                                                            disabled={syncingDialpadActivityId === a.id}
+                                                            title="Check Dialpad for concluded call details and sync Call ID"
+                                                        >
+                                                            {syncingDialpadActivityId === a.id ? (
+                                                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                                            ) : (
+                                                                <RefreshCw className="w-2.5 h-2.5" />
+                                                            )}
+                                                            Sync Dialpad
+                                                        </Button>
+                                                    )}
                                                 </>
                                             )}
                                             {isCall && (
                                                 <>
                                                     <span>•</span>
-                                                    <span>AirCall ID: <code className="bg-muted px-1 rounded font-mono text-[9px]">{a.callId}</code></span>
+                                                    <span>{isDialpadAct ? 'Dialpad' : 'AirCall'} ID: <code className="bg-muted px-1 rounded font-mono text-[9px]">{a.callId}</code></span>
                                                     {a.duration && (
                                                         <>
                                                             <span>•</span>

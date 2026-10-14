@@ -223,3 +223,74 @@ function parseDialpadTranscriptPayload(data: any): { utterances: Array<{ speaker
 
   return utterances.length > 0 ? { utterances } : null;
 }
+
+/**
+ * Fetches call details for a specific Dialpad call by ID.
+ */
+export async function fetchDialpadCall(callId: string, apiKeyOverride?: string): Promise<any | null> {
+  const headers = getDialpadAuthHeaders(apiKeyOverride);
+  if (!headers) return null;
+
+  try {
+    const res = await fetch(`https://dialpad.com/api/v2/call/${callId}`, {
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      // Fallback endpoint
+      const fb = await fetch(`https://dialpad.com/api/v2/calls/${callId}`, {
+        headers,
+        cache: 'no-store',
+      });
+      if (!fb.ok) return null;
+      return await fb.json();
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.warn(`[Dialpad] Failed to fetch call details for ${callId}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Fetches recent concluded calls from Dialpad.
+ */
+export async function fetchRecentDialpadCalls(
+  options?: { limit?: number; targetId?: string | number },
+  apiKeyOverride?: string
+): Promise<any[]> {
+  const headers = getDialpadAuthHeaders(apiKeyOverride);
+  if (!headers) return [];
+
+  const limit = options?.limit || 20;
+  let url = `https://dialpad.com/api/v2/call?limit=${limit}`;
+  if (options?.targetId) {
+    url += `&target_id=${options.targetId}`;
+  }
+
+  try {
+    const res = await fetch(url, {
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      const fb = await fetch(`https://dialpad.com/api/v2/calls?limit=${limit}`, {
+        headers,
+        cache: 'no-store',
+      });
+      if (!fb.ok) return [];
+      const fbData = await fb.json() as any;
+      return fbData?.items || fbData?.calls || [];
+    }
+
+    const data = await res.json() as any;
+    return data?.items || data?.calls || [];
+  } catch (err) {
+    console.warn('[Dialpad] Failed to fetch recent calls:', err);
+    return [];
+  }
+}
+

@@ -16,6 +16,7 @@ import { generateRandomAlphanumeric } from '@/lib/prospect-plus-id';
 import { deactivateLocalMileAccessForLead } from './localmile-deactivation';
 import { REVERSE_OUTCOME_TO_STATUS_MAP } from '@/lib/status-outcome-mapping';
 import { MULTISITE_ACCOUNT_MANAGER_UID, isMultisiteCampaign } from '@/lib/constants';
+import { calculateMonthlyValue } from '@/lib/mrr';
 
 /**
  * Sanitizes data retrieved from Firestore to ensure it can be passed from 
@@ -2900,7 +2901,14 @@ async function moveUserRoute(src: string, target: string, rid: string): Promise<
 async function updateLeadServices(id: string, s: ServiceSelection[]): Promise<void> {
     const colName = await getLeadOrCompanyCollection(id);
     const leadRef = doc(firestore, colName, id);
-    await updateDoc(leadRef, { services: s, updatedAt: new Date() });
+    const mrr = calculateMonthlyValue({ services: s, customerStatus: 'Won' }, true);
+    await updateDoc(leadRef, { 
+        services: s, 
+        monthlyValue: mrr,
+        mrr: mrr,
+        estimatedMrr: mrr,
+        updatedAt: new Date() 
+    });
 }
 
 async function updateLeadCommReg(id: string, commRegId: string, dynamicScfUrl: string): Promise<void> {
