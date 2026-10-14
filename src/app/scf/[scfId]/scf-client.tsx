@@ -704,7 +704,7 @@ export default function ScfClient({
                         <th className="px-6 py-4 font-bold whitespace-nowrap">Weight Limit</th>
                         <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Base Price</th>
                         <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Fuel Levy</th>
-                        <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Total Rate (Exc GST)</th>
+                        <th className="px-6 py-4 font-bold text-right whitespace-nowrap">Total (Inc. Fuel Surcharge &amp; GST)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
