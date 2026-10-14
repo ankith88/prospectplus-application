@@ -1,6 +1,7 @@
 import { DecisionMakerCandidate } from '@/lib/types';
 import { searchExa } from './exa-discovery';
 import { runCliCommand } from './runner';
+import { enrichCandidatesWithHunter } from './hunter-enricher';
 
 /**
  * Classify a person's role into high-value sales departments for MailPlus
@@ -94,6 +95,15 @@ export async function findDecisionMakers(
   // Sort candidates by High confidence first
   const order = { High: 0, Medium: 1, Low: 2 };
   candidates.sort((a, b) => (order[a.confidence || 'Low'] || 2) - (order[b.confidence || 'Low'] || 2));
+
+  // Enrich candidates with verified business emails and direct phone numbers via Hunter.io
+  if (candidates.length > 0 && websiteUrl) {
+    try {
+      await enrichCandidatesWithHunter(candidates, websiteUrl);
+    } catch (err: any) {
+      console.warn(`[findDecisionMakers] Hunter enrichment non-fatal error for ${companyName}:`, err.message || err);
+    }
+  }
 
   return candidates;
 }

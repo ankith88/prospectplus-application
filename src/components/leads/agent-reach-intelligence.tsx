@@ -755,6 +755,35 @@ export function UnifiedIntelligenceHub({
                           </Badge>
                         </div>
                         <p className="text-xs text-slate-600 dark:text-slate-400">{topDecisionMaker.title}</p>
+                        {(topDecisionMaker.email || topDecisionMaker.phone) && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px]">
+                            {topDecisionMaker.email && (
+                              <a
+                                href={`mailto:${topDecisionMaker.email}`}
+                                className="inline-flex items-center gap-1 text-[#095c7b] hover:underline font-medium"
+                                title="Click to compose email"
+                              >
+                                <Mail className="w-3 h-3 text-[#095c7b] shrink-0" />
+                                <span>{topDecisionMaker.email}</span>
+                                {typeof topDecisionMaker.emailScore === 'number' && (
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 py-0 rounded font-normal">
+                                    {topDecisionMaker.emailScore}%
+                                  </span>
+                                )}
+                              </a>
+                            )}
+                            {topDecisionMaker.phone && (
+                              <a
+                                href={`tel:${topDecisionMaker.phone}`}
+                                className="inline-flex items-center gap-1 text-slate-700 hover:text-slate-900 dark:text-slate-300 font-medium"
+                                title="Click to call"
+                              >
+                                <Phone className="w-3 h-3 text-slate-500 shrink-0" />
+                                <span>{topDecisionMaker.phone}</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1967,6 +1996,33 @@ export function UnifiedIntelligenceHub({
                             {c.department}
                           </span>
                         )}
+                        {(c.email || c.phone) && (
+                          <div className="mt-2 space-y-1 text-xs">
+                            {c.email && (
+                              <div className="flex items-center justify-between gap-1 text-slate-700 dark:text-slate-300">
+                                <a
+                                  href={`mailto:${c.email}`}
+                                  className="inline-flex items-center gap-1 text-[#095c7b] hover:underline truncate font-medium"
+                                  title="Click to compose email"
+                                >
+                                  <Mail className="w-3 h-3 text-[#095c7b] shrink-0" />
+                                  <span className="truncate">{c.email}</span>
+                                </a>
+                                {typeof c.emailScore === 'number' && (
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 rounded shrink-0">
+                                    {c.emailScore}%
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {c.phone && (
+                              <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                <a href={`tel:${c.phone}`} className="hover:underline">{c.phone}</a>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="pt-2.5 border-t border-slate-100 dark:border-slate-700/70 flex items-center justify-between gap-2">
@@ -2292,6 +2348,33 @@ export function FindDecisionMakersDialog({
                           <Badge variant="outline" className="text-[9px] mt-1 px-1.5 py-0 border-slate-200 text-slate-600">
                             {c.department}
                           </Badge>
+                        )}
+                        {(c.email || c.phone) && (
+                          <div className="mt-1.5 space-y-0.5 text-[11px]">
+                            {c.email && (
+                              <div className="flex items-center justify-between gap-1 text-slate-700 dark:text-slate-300">
+                                <a
+                                  href={`mailto:${c.email}`}
+                                  className="inline-flex items-center gap-1 text-[#095c7b] hover:underline truncate font-medium"
+                                  title="Click to compose email"
+                                >
+                                  <Mail className="w-2.5 h-2.5 text-[#095c7b] shrink-0" />
+                                  <span className="truncate">{c.email}</span>
+                                </a>
+                                {typeof c.emailScore === 'number' && (
+                                  <span className="text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 rounded shrink-0">
+                                    {c.emailScore}%
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {c.phone && (
+                              <div className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                                <Phone className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                <a href={`tel:${c.phone}`} className="hover:underline">{c.phone}</a>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
 

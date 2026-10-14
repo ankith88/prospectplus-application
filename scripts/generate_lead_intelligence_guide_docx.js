@@ -583,7 +583,7 @@ async function generateDocx() {
             spacing: { before: 280, after: 120 },
             children: [
               new TextRun({
-                text: '4. Deep Dive: Finding Contacts from LinkedIn',
+                text: '4. Deep Dive: Finding Contacts from LinkedIn & Hunter.io Email/Phone Waterfall',
                 bold: true,
                 size: 28,
                 color: PRIMARY_COLOR,
@@ -594,7 +594,7 @@ async function generateDocx() {
             spacing: { after: 100 },
             children: [
               new TextRun({
-                text: 'Finding the right operational person is the single highest-value step in outbound B2B courier sales. The Hub completely automates this workflow:',
+                text: 'Finding the right operational person is the single highest-value step in outbound B2B courier sales. The Hub completely automates this workflow by unifying LinkedIn profile discovery with Hunter.io email and phone waterfall enrichment:',
                 size: 20,
               }),
             ],
@@ -609,21 +609,28 @@ async function generateDocx() {
           new Paragraph({
             spacing: { after: 60 },
             children: [
-              new TextRun({ text: '2. Primary Decision Maker Scoring: ', bold: true, color: PRIMARY_COLOR, size: 20 }),
+              new TextRun({ text: '2. Hunter.io Email & Direct Phone Waterfall: ', bold: true, color: PRIMARY_COLOR, size: 20 }),
+              new TextRun({ text: 'Simultaneously queries Hunter.io Domain Search and Email Finder APIs using the verified domain. Matches candidates to return verified work email addresses, deliverability confidence scores (e.g. 94%), and direct phone numbers.', size: 20 }),
+            ],
+          }),
+          new Paragraph({
+            spacing: { after: 60 },
+            children: [
+              new TextRun({ text: '3. Primary Decision Maker Scoring: ', bold: true, color: PRIMARY_COLOR, size: 20 }),
               new TextRun({ text: 'The scoring algorithm flags operational budget holders with Primary Decision Maker and High Match badges, eliminating rep confusion.', size: 20 }),
             ],
           }),
           new Paragraph({
             spacing: { after: 60 },
             children: [
-              new TextRun({ text: '3. 1-Click Permanent CRM Sync: ', bold: true, color: PRIMARY_COLOR, size: 20 }),
-              new TextRun({ text: 'Clicking [+ Add to Contacts] immediately persists the contact into the lead\'s Contacts tab with full name, job title, and LinkedIn URL. The button switches to [✓ In Contacts] to prevent duplicates.', size: 20 }),
+              new TextRun({ text: '4. 1-Click Permanent CRM Sync (Zero Manual Entry): ', bold: true, color: PRIMARY_COLOR, size: 20 }),
+              new TextRun({ text: 'Clicking [+ Add to Contacts] immediately persists the contact into the lead\'s Contacts tab with full name, job title, LinkedIn URL, verified email, and phone number. The button switches to [✓ In Contacts] to prevent duplicates.', size: 20 }),
             ],
           }),
           new Paragraph({
             spacing: { after: 200 },
             children: [
-              new TextRun({ text: '4. Direct LinkedIn Verification: ', bold: true, color: PRIMARY_COLOR, size: 20 }),
+              new TextRun({ text: '5. Direct LinkedIn Verification: ', bold: true, color: PRIMARY_COLOR, size: 20 }),
               new TextRun({ text: 'The [LinkedIn ↗] button enables reps to instantly open the profile in a new tab to view past career history and mutual connections.', size: 20 }),
             ],
           }),

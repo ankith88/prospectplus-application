@@ -66,8 +66,8 @@ export async function POST(
         firstName,
         lastName,
         title: candidate.title,
-        email: '',
-        phone: leadData.customerPhone || leadData.phone || '',
+        email: candidate.email || '',
+        phone: candidate.phone || leadData.customerPhone || leadData.phone || '',
         linkedinUrl: candidate.linkedinUrl,
       };
 

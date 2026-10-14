@@ -355,6 +355,10 @@ export interface DecisionMakerCandidate {
   confidence?: 'High' | 'Medium' | 'Low';
   source?: string;
   location?: string;
+  email?: string;
+  emailScore?: number;
+  phone?: string;
+  hunterEnriched?: boolean;
 }
 
 export interface SocialIntelligence {

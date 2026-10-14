@@ -166,18 +166,18 @@ Below is the complete directory of all 27 data fields captured during enrichment
 
 ---
 
-## 4. Deep Dive: Finding Contacts from LinkedIn
+## 4. Deep Dive: Finding Contacts from LinkedIn & Hunter.io Email/Phone Waterfall
 
-Finding the right operational person is the single highest-value step in outbound B2B courier sales. The Hub completely automates this workflow:
+Finding the right operational person is the single highest-value step in outbound B2B courier sales. The Hub completely automates this workflow by combining LinkedIn profile discovery with Hunter.io contact waterfall enrichment:
 
 ```mermaid
 graph LR
     A[Company Domain & Name] --> B[LinkedIn Agent Reach Indexer]
     B --> C[Filters: Logistics, Warehouse, Operations, MD]
-    C --> D[Confidence Scoring: Primary Decision Maker]
-    D --> E[Interactive Card Grid]
+    C --> D[Hunter.io Waterfall: Domain Search & Email Finder]
+    D --> E[Enriched Decision Maker Cards with Email & Direct Phone]
     E --> F[1-Click: + Add to Contacts]
-    F --> G[Permanent Lead Contact Record in CRM]
+    F --> G[Permanent CRM Contact with Name, Title, LinkedIn, Email & Phone]
 ```
 
 ### 1. How It Works
@@ -187,17 +187,22 @@ graph LR
   - **Executive Operations:** Operations Directors, General Managers, Managing Directors, Founders.
 - Extracted details include **Full Name**, **Current Title**, **Department Tag** (e.g. *Operations & Management*), and **Location** (e.g. *Melbourne, Australia*).
 
-### 2. Match Confidence (`Primary Decision Maker` / `High Match`)
-- The algorithm scores each profile. Operational roles that control shipping budgets and carrier selection receive a **`Primary Decision Maker`** or **`High Match`** badge.
-- This ensures reps do not waste time calling general office administrators or non-operational staff.
+### 2. Automated Hunter.io Email & Direct Phone Waterfall
+- Simultaneously with the LinkedIn discovery, the system queries the **Hunter.io Domain Search and Email Finder APIs** using the prospect's verified corporate domain (`HUNTER_API_KEY`):
+  - **Domain-Level Cache Search:** Queries known emails for the domain and matches them against discovered LinkedIn candidates.
+  - **Targeted Email Finder Fallback:** For top primary decision-makers not in the domain list, queries Hunter's Email Finder to look up the exact work email.
+  - **Discovered Fields:** Returns the verified work email address, deliverability confidence score (e.g. `94%`), and direct phone number if on file.
 
-### 3. Direct Profile Verification
-- Every card includes a direct external link icon `[LinkedIn ↗]`. Reps can click to view the live LinkedIn profile in a new tab to see background, mutual connections, or recent company milestones.
+### 3. Match Confidence & Verification
+- **Role Authority:** Primary operational signatories receive `Primary Decision Maker` or `High Match` badges.
+- **Direct LinkedIn Verification:** Reps can click `[LinkedIn ↗]` to open their live profile in a new tab.
+- **Deliverability Badge:** Verified emails display confidence scores (e.g., `94%`) so reps know the inbox is active before sending proposals.
 
-### 4. 1-Click Permanent CRM Contact Creation
-- Reps click **`+ Add to Contacts`** (styled in high-contrast dark teal `#095c7b` with white text).
-- The system automatically creates a permanent contact entry in the lead's **"Contacts"** tab with name, job title, and linked profile.
-- The button smoothly transforms into a green **`[✓ In Contacts]`** status badge to prevent duplicate additions.
+### 4. 1-Click Permanent CRM Contact Creation (Zero Data Entry)
+- When reps click **`+ Add to Contacts`** (styled in high-contrast dark teal `#095c7b` with white text):
+  - The contact record is saved in the CRM with **Full Name**, **Job Title**, **LinkedIn URL**, **Verified Work Email**, and **Direct / Company Phone**.
+  - Reps never have to copy-paste or manually type contact information.
+  - The button transitions into a green **`[✓ In Contacts]`** status badge to prevent duplicate records.
 
 ### 5. On-Demand Re-Scanning
 - If a company recently restructured or appointed a new supply chain head, reps can click **`Re-scan LinkedIn`** inside the Decision Makers view to refresh results immediately.
